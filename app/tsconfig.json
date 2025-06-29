@@ -1,0 +1,7 @@
+{
+  // https://v3.nuxtjs.org/concepts/typescript
+  "extends": "./../tsconfig.json",
+  "compilerOptions": {
+    "ignoreDeprecations": "5.0"
+  }
+}

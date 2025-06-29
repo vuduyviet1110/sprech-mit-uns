@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+model User {
+  id           String              @id @default(uuid())
+  email        String              @unique
+  passwordHash String
+  createdAt    DateTime            @default(now())
+  progress     UserWordProgress[]
+}
+
+model VocabularyWord {
+  id        String              @id @default(uuid())
+  word      String
+  meaning   String
+  example   String?
+  level     String
+  audioUrl  String?
+  imageUrl  String?
+  createdAt DateTime            @default(now())
+  progress  UserWordProgress[]
+}
+
+model UserWordProgress {
+  id             String           @id @default(uuid())
+  userId         String
+  wordId         String
+  user           User             @relation(fields: [userId], references: [id])
+  word           VocabularyWord   @relation(fields: [wordId], references: [id])
+  nextReviewAt   DateTime
+  correctCount   Int              @default(0)
+  incorrectCount Int              @default(0)
+  lastReviewedAt DateTime         @default(now())
+}
