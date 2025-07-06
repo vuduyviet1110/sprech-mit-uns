@@ -23,6 +23,8 @@ model VocabularyWord {
   example   String?
   level     String
   audioUrl  String?
+  type      String?
+  transcription String?
   imageUrl  String?
   createdAt DateTime            @default(now())
   progress  UserWordProgress[]

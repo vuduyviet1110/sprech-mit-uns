@@ -22,4 +22,6 @@ export interface Vocabulary {
   level: 'A1' | 'A2' | 'B1'
   audioUrl?: string
   imageUrl?: string
+  transcription?: string
+  type?: string
 }

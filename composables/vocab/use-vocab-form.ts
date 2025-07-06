@@ -1,5 +1,6 @@
 import { useVocabulary } from './use-vocabulary'
-
+import type { Vocabulary } from '@utils/types'
+import { withLoading } from '~/utils/withLoading'
 export function useVocabularyForm() {
   const editing = ref<boolean>(false)
   const form: Ref<Vocabulary> = ref({
@@ -9,7 +10,9 @@ export function useVocabularyForm() {
     example: '',
     level: 'A1',
     audioUrl: '',
+    type: 'noun',
     imageUrl: '',
+    transcription: '',
   })
   const errorMessage = ref<string>('')
   const { fetchVocabularies, selectedLevel } = useVocabulary()
@@ -17,22 +20,23 @@ export function useVocabularyForm() {
   const saveVocabulary = async () => {
     const payload = { ...form.value }
     try {
-      if (editing.value) {
-        await $fetch(`/api/vocabulary/${form.value.id}`, {
-          method: 'PUT',
+      const url = editing.value
+        ? `/api/vocabulary/${form.value.id}`
+        : '/api/vocabulary'
+      const method = editing.value ? 'PUT' : 'POST'
+
+      await withLoading(() =>
+        $fetch<Vocabulary>(url, {
+          method,
           body: payload,
-        })
-      } else {
-        await $fetch('/api/vocabulary', {
-          method: 'POST',
-          body: payload,
-        })
-      }
+        }),
+      )
+
       resetForm()
       editing.value = false
       selectedLevel.value = ''
       errorMessage.value = ''
-      await fetchVocabularies()
+      await fetchVocabularies(true)
     } catch (err) {
       errorMessage.value = 'Lỗi khi lưu từ vựng'
     }
@@ -48,6 +52,8 @@ export function useVocabularyForm() {
       level: vocab.level,
       audioUrl: vocab.audioUrl || '',
       imageUrl: vocab.imageUrl || '',
+      transcription: vocab.transcription || '',
+      type: vocab.type || '',
     }
   }
 
@@ -65,6 +71,8 @@ export function useVocabularyForm() {
       level: 'A1',
       audioUrl: '',
       imageUrl: '',
+      transcription: '',
+      type: '',
     }
   }
 

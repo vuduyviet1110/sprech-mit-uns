@@ -116,8 +116,8 @@ function playAudio(audioFile: string) {
             </div>
             <button
               class="border border-blue-200 hover:bg-blue-50 p-1 rounded"
-              @click="playAudio(word.audio)"
               aria-label="Play audio"
+              @click="playAudio(word.audio)"
             >
               🔊
             </button>

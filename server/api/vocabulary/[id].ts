@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
           level: body.level,
           audioUrl: body.audioUrl,
           imageUrl: body.imageUrl,
+          transcription: body.transcription,
+          type: body.type,
         },
       })
       return vocabulary

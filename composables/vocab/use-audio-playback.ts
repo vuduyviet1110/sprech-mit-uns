@@ -6,7 +6,7 @@ interface Vocabulary {
 }
 
 export function useAudioPlayback() {
-  const isPlaying = ref<boolean>(false)
+  const playingWord = ref<string | null>(null)
   const errorMessage = ref<string>('')
 
   const loadVoices = () => {
@@ -22,22 +22,22 @@ export function useAudioPlayback() {
     })
   }
 
-  const playAudioOrSpeak = async (vocab: Vocabulary) => {
-    isPlaying.value = true
+  const playAudioOrSpeak = (vocab: Vocabulary) => {
+    playingWord.value = vocab.word
     errorMessage.value = ''
 
     if (vocab.audioUrl) {
       try {
         const audio = new Audio(vocab.audioUrl)
-        await audio.play()
-        audio.onended = () => (isPlaying.value = false)
+        audio.play()
+        audio.onended = () => (playingWord.value = null)
         audio.onerror = () => {
           errorMessage.value = 'Lỗi khi phát âm thanh'
-          isPlaying.value = false
+          playingWord.value = null
         }
       } catch (err) {
         errorMessage.value = 'Lỗi khi phát âm thanh'
-        isPlaying.value = false
+        playingWord.value = null
       }
     } else {
       try {
@@ -56,16 +56,16 @@ export function useAudioPlayback() {
             'Không tìm thấy giọng tiếng Đức, sử dụng giọng mặc định'
         }
 
-        utterance.onend = () => (isPlaying.value = false)
+        utterance.onend = () => (playingWord.value = null)
         utterance.onerror = () => {
           errorMessage.value = 'Lỗi khi phát âm'
-          isPlaying.value = false
+          playingWord.value = null
         }
 
         speechSynthesis.speak(utterance)
       } catch (err) {
         errorMessage.value = 'Lỗi khi sử dụng SpeechSynthesis'
-        isPlaying.value = false
+        playingWord.value = null
       }
     }
   }
@@ -81,7 +81,7 @@ export function useAudioPlayback() {
   })
 
   return {
-    isPlaying,
+    playingWord,
     errorMessage,
     playAudioOrSpeak,
   }
