@@ -3,9 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_DATABASE_URL")
 }
 
 model User {
@@ -16,28 +16,62 @@ model User {
   progress     UserWordProgress[]
 }
 
-model VocabularyWord {
-  id        String              @id @default(uuid())
-  word      String
-  meaning   String
-  example   String?
-  level     String
-  audioUrl  String?
-  type      String?
-  transcription String?
-  imageUrl  String?
-  createdAt DateTime            @default(now())
-  progress  UserWordProgress[]
+model VocabularyWord  {
+  id             String               @id @default(uuid())
+  word           String
+  meaning        String
+  example        String?
+  pronunciation  String?
+  type           String?
+  transcription  String?
+  imageUrl       String?
+  audioUrl       String?
+  synonyms       String[]
+  antonyms       String[]
+  level          String?
+  createdAt      DateTime             @default(now())
+
+  topics         WordTopic[]
+  userProgress   UserWordProgress[]
 }
 
+model Topic {
+  id        String       @id @default(uuid())
+  name      String       @unique
+  words     WordTopic[]
+}
+
+model WordTopic {
+  id        String   @id @default(uuid())
+  wordId    String?
+  topicId   String?
+
+  word      VocabularyWord? @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  topic     Topic?          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([wordId, topicId])
+}
+
+
 model UserWordProgress {
-  id             String           @id @default(uuid())
+  id             String   @id @default(uuid())
   userId         String
   wordId         String
-  user           User             @relation(fields: [userId], references: [id])
-  word           VocabularyWord   @relation(fields: [wordId], references: [id])
-  nextReviewAt   DateTime
-  correctCount   Int              @default(0)
-  incorrectCount Int              @default(0)
-  lastReviewedAt DateTime         @default(now())
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word           VocabularyWord    @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  nextReviewAt   DateTime          
+  correctCount   Int      @default(0)
+  incorrectCount Int      @default(0)
+  lastReviewedAt DateTime @default(now())
+  lastCorrect    Boolean  @default(false)  
+  isMastered     Boolean  @default(false) 
+  masteryLevel   Int      @default(0)     // 0-5 (độ thành thạo)
+  streak         Int      @default(0)     
+
+  @@index([userId])
+  @@index([wordId])
+  @@index([nextReviewAt])
+  @@unique([userId, wordId])
 }

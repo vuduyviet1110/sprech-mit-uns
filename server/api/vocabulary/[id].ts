@@ -27,22 +27,99 @@ export default defineEventHandler(async (event) => {
   // PUT: Cập nhật từ vựng
   if (method === 'PUT') {
     const body = await readBody(event)
+    const id = String(event.context.params?.id || '')
+
+    const {
+      word,
+      meaning,
+      pronunciation,
+      transcription,
+      example,
+      audioUrl,
+      synonyms,
+      imageUrl,
+      wordType: type,
+      antonyms,
+      level,
+      topicIds = [],
+      topicNames = [],
+    } = body
+
     try {
-      const vocabulary = await prisma.vocabularyWord.update({
+      // Tạo các topic mới nếu cần
+      const createdTopics = await Promise.all(
+        (topicNames || []).map(async (name: string) => {
+          const existing = await prisma.topic.findFirst({ where: { name } })
+          if (existing) return existing
+          return await prisma.topic.create({ data: { name } })
+        }),
+      )
+
+      const allTopicIds = [
+        ...topicIds,
+        ...createdTopics.map((topic) => topic.id),
+      ]
+
+      // Cập nhật thông tin từ vựng (không động đến topics)
+      await prisma.vocabularyWord.update({
         where: { id },
         data: {
-          word: body.word,
-          meaning: body.meaning,
-          example: body.example,
-          level: body.level,
-          audioUrl: body.audioUrl,
-          imageUrl: body.imageUrl,
-          transcription: body.transcription,
-          type: body.type,
+          word,
+          meaning,
+          example,
+          level,
+          audioUrl,
+          pronunciation,
+          antonyms,
+          synonyms,
+          imageUrl,
+          transcription,
+          type,
         },
       })
+
+      // Xoá các WordTopic không còn nữa
+      await prisma.wordTopic.deleteMany({
+        where: {
+          wordId: id,
+          NOT: {
+            topicId: {
+              in: allTopicIds,
+            },
+          },
+        },
+      })
+
+      // Upsert từng WordTopic
+      await Promise.all(
+        allTopicIds.map((topicId) =>
+          prisma.wordTopic.upsert({
+            where: {
+              wordId_topicId: {
+                wordId: id,
+                topicId,
+              },
+            },
+            update: {},
+            create: {
+              wordId: id,
+              topicId,
+            },
+          }),
+        ),
+      )
+
+      // Trả lại vocabulary có topics
+      const vocabulary = await prisma.vocabularyWord.findUnique({
+        where: { id },
+        include: {
+          topics: true,
+        },
+      })
+
       return vocabulary
     } catch (error) {
+      console.error('💥 Update error:', error)
       throw createError({
         statusCode: 500,
         message: 'Error updating vocabulary',
@@ -50,8 +127,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // DELETE: Xóa từ vựng
   if (method === 'DELETE') {
+    console.log(`Deleting vocabulary with ID: ${id}`)
     try {
       await prisma.vocabularyWord.delete({ where: { id } })
       return { message: 'Vocabulary deleted successfully' }

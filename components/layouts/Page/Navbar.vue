@@ -58,8 +58,8 @@ const menus = computed(
     <!-- Mobile Drawer -->
     <AwesomeActionSheet
       v-if="showDrawer"
-      @close="showDrawer = false"
       class="md:hidden"
+      @close="showDrawer = false"
     >
       <AwesomeActionSheetGroup>
         <AwesomeActionSheetHeader>

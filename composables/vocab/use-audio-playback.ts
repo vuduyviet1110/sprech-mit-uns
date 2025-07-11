@@ -8,7 +8,6 @@ interface Vocabulary {
 export function useAudioPlayback() {
   const playingWord = ref<string | null>(null)
   const errorMessage = ref<string>('')
-
   const loadVoices = () => {
     return new Promise<void>((resolve) => {
       const voices = speechSynthesis.getVoices()

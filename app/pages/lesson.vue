@@ -6,11 +6,11 @@ useHead({ title: 'Blank Page' })
 <template>
   <LayoutPageWrapper>
     <LayoutPageHeader>
-      <LayoutPageTitle text="Blank Page" class="capitalize" />
+      <LayoutPageTitle text="Lesson" class="capitalize" />
     </LayoutPageHeader>
     <LayoutPageSection>
       <LayoutPageSectionTitle text="Section Title" />
-      <div>My Content</div>
+      <div>My Lesson</div>
     </LayoutPageSection>
   </LayoutPageWrapper>
 </template>

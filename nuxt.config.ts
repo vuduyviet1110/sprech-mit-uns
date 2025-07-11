@@ -1,5 +1,4 @@
 import { createResolver } from '@nuxt/kit'
-
 const { resolve } = createResolver(import.meta.url)
 
 export default defineNuxtConfig({
@@ -28,13 +27,22 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@vueuse/nuxt',
     '@nuxt/content',
+    'shadcn-nuxt',
   ],
-
+  shadcn: {
+    prefix: '',
+    componentDir: './components/ui',
+  },
   css: [
     resolve('./assets/scss/_variables.scss'),
     resolve('./assets/scss/app.scss'),
   ],
-
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  },
   components: [
     { path: resolve('./components/layouts'), prefix: 'Layout', global: true },
     { path: resolve('./components/awesome'), prefix: 'Awesome', global: true },

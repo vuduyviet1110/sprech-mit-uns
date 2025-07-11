@@ -1,10 +1,10 @@
 import { useVocabulary } from './use-vocabulary'
-import type { Vocabulary } from '@utils/types'
+import type { VocabularyWord } from '@utils/types'
 import { withLoading } from '~/utils/withLoading'
 export function useVocabularyForm() {
   const editing = ref<boolean>(false)
-  const form: Ref<Vocabulary> = ref({
-    id: null,
+  const form: Ref<VocabularyWord> = ref({
+    id: '',
     word: '',
     meaning: '',
     example: '',
@@ -13,12 +13,21 @@ export function useVocabularyForm() {
     type: 'noun',
     imageUrl: '',
     transcription: '',
+    synonyms: [],
+    antonyms: [],
+    topics: [],
   })
   const errorMessage = ref<string>('')
   const { fetchVocabularies, selectedLevel } = useVocabulary()
 
   const saveVocabulary = async () => {
-    const payload = { ...form.value }
+    const payload = {
+      ...form.value,
+      topicIds: form.value.topics.map((t) =>
+        typeof t === 'string' ? t : t.id,
+      ),
+    }
+    console.log('Payload:', payload)
     try {
       const url = editing.value
         ? `/api/vocabulary/${form.value.id}`
@@ -26,7 +35,7 @@ export function useVocabularyForm() {
       const method = editing.value ? 'PUT' : 'POST'
 
       await withLoading(() =>
-        $fetch<Vocabulary>(url, {
+        $fetch<VocabularyWord>(url, {
           method,
           body: payload,
         }),
@@ -42,7 +51,7 @@ export function useVocabularyForm() {
     }
   }
 
-  const editVocabulary = (vocab: Vocabulary) => {
+  const editVocabulary = (vocab: VocabularyWord) => {
     editing.value = true
     form.value = {
       id: vocab.id,
@@ -54,6 +63,9 @@ export function useVocabularyForm() {
       imageUrl: vocab.imageUrl || '',
       transcription: vocab.transcription || '',
       type: vocab.type || '',
+      synonyms: vocab.synonyms,
+      antonyms: vocab.antonyms,
+      topics: vocab.topics ? vocab.topics.map((t) => t.topicId) : [],
     }
   }
 
@@ -64,13 +76,16 @@ export function useVocabularyForm() {
 
   const resetForm = () => {
     form.value = {
-      id: null,
+      id: '',
       word: '',
       meaning: '',
       example: '',
       level: 'A1',
       audioUrl: '',
       imageUrl: '',
+      synonyms: [],
+      antonyms: [],
+      topics: [],
       transcription: '',
       type: '',
     }

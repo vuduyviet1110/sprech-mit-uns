@@ -1,54 +1,16 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
-
-const sampleLesson = {
-  title: 'At the Restaurant',
-  level: 'A2',
-  vocabulary: [
-    {
-      english: 'Menu',
-      german: 'Die Speisekarte',
-      pronunciation: '/ˈʃpaɪzəˌkartə/',
-      audio: 'speisekarte.mp3',
-    },
-    {
-      english: 'Waiter',
-      german: 'Der Kellner',
-      pronunciation: '/ˈkɛlnɐ/',
-      audio: 'kellner.mp3',
-    },
-    {
-      english: 'Bill',
-      german: 'Die Rechnung',
-      pronunciation: '/ˈrɛçnʊŋ/',
-      audio: 'rechnung.mp3',
-    },
-  ],
-  sentences: [
-    {
-      english: 'Could I have the menu, please?',
-      german: 'Könnte ich bitte die Speisekarte haben?',
-      audio: 'sentence1.mp3',
-    },
-    {
-      english: 'I would like to order.',
-      german: 'Ich möchte gerne bestellen.',
-      audio: 'sentence2.mp3',
-    },
-  ],
-}
+import { useAudioPlayback } from '~/composables/vocab/use-audio-playback'
+import { sampleLesson } from '~/mock-data'
 
 const currentStep = ref(0)
 const showTranslation = ref(false)
-
+const {
+  playingWord,
+  errorMessage: errorMessageAudio,
+  playAudioOrSpeak,
+} = useAudioPlayback()
 const steps = ['Vocabulary', 'Sentences', 'Practice']
-
-function playAudio(audioFile: string) {
-  const audio = new Audio(`/audio/${audioFile}`)
-  audio.play().catch((error) => {
-    console.error('Cannot play audio:', error)
-  })
-}
 </script>
 
 <template>
@@ -98,7 +60,6 @@ function playAudio(audioFile: string) {
 
     <!-- Lesson Content -->
     <div class="bg-white/90 backdrop-blur-sm p-8 rounded shadow">
-      <!-- Vocabulary Step -->
       <div v-if="currentStep === 0" class="space-y-6">
         <h3 class="text-xl font-semibold text-blue-900 mb-6">New Vocabulary</h3>
         <div
@@ -108,21 +69,21 @@ function playAudio(audioFile: string) {
         >
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-4">
-              <span class="text-lg text-gray-700">{{ word.english }}</span>
+              <span class="text-lg text-gray-700">{{ word.word }}</span>
               <span class="text-gray-400">→</span>
               <span class="text-xl font-semibold text-blue-900">{{
-                word.german
+                word.meaning
               }}</span>
             </div>
             <button
               class="border border-blue-200 hover:bg-blue-50 p-1 rounded"
               aria-label="Play audio"
-              @click="playAudio(word.audio)"
+              @click="playAudioOrSpeak(word)"
             >
               🔊
             </button>
           </div>
-          <div class="text-sm text-gray-500">IPA: {{ word.pronunciation }}</div>
+          <div class="text-sm text-gray-500">IPA: {{ word.example }}</div>
         </div>
       </div>
 
@@ -138,17 +99,17 @@ function playAudio(audioFile: string) {
         >
           <div class="space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-gray-700">{{ sentence.english }}</span>
+              <span class="text-gray-700">{{ sentence.word }}</span>
               <button
                 class="border border-green-200 hover:bg-green-50 p-1 rounded"
-                @click="playAudio(sentence.audio)"
                 aria-label="Play audio"
+                @click="playAudioOrSpeak(sentence)"
               >
                 🔊
               </button>
             </div>
             <div class="text-lg font-medium text-green-900">
-              {{ sentence.german }}
+              {{ sentence.meaning }}
             </div>
           </div>
         </div>
@@ -165,8 +126,8 @@ function playAudio(audioFile: string) {
           </p>
           <button
             v-if="!showTranslation"
-            @click="showTranslation = true"
             class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
+            @click="showTranslation = true"
           >
             Show Answer
           </button>
@@ -175,8 +136,8 @@ function playAudio(audioFile: string) {
               Die Speisekarte
             </div>
             <button
-              @click="showTranslation = false"
               class="border border-purple-200 hover:bg-purple-50 px-4 py-2 rounded flex items-center justify-center gap-2"
+              @click="showTranslation = false"
             >
               ↻ Try Again
             </button>
@@ -188,15 +149,15 @@ function playAudio(audioFile: string) {
       <div class="flex justify-between mt-8 pt-6 border-t border-gray-200">
         <button
           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50"
-          @click="currentStep = Math.max(0, currentStep - 1)"
           :disabled="currentStep === 0"
+          @click="currentStep = Math.max(0, currentStep - 1)"
         >
           Previous
         </button>
         <button
           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded disabled:opacity-50"
-          @click="currentStep = Math.min(2, currentStep + 1)"
           :disabled="currentStep === 2"
+          @click="currentStep = Math.min(2, currentStep + 1)"
         >
           Next
         </button>

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 const { awesome } = useAppConfig()
-const { parseMenuRoute, parseMenuTitle } = useNavbarParser()
 
 const props = defineProps({
   withAlert: {
@@ -10,11 +9,7 @@ const props = defineProps({
 })
 
 const titlesText = computed<string[]>(() =>
-  (
-    awesome?.layout?.welcome?.title ||
-    awesome?.name ||
-    'Nuxt&nbsp;3 Awesome Starter'
-  )
+  (awesome?.layout?.welcome?.title || awesome?.name || 'Sprech&nbsp;3  Mit Uns')
     .replaceAll('&nbsp;', ' ')
     .split(' '),
 )

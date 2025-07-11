@@ -11,7 +11,7 @@ const props = defineProps({
   },
   isDropdown: {
     type: Boolean,
-    default: false,
+    default: true,
   },
 })
 </script>

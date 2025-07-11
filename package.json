@@ -2,14 +2,14 @@
   "name": "@nuxt-awesome/theme",
   "version": "2.0.12",
   "description": "a Nuxt 3 template and boilerplate with a lot of useful features. Nuxt 3 + Tailwindcss + Nuxt Layer",
-  "author": "viandwi24",
+  "author": "vuduyviet1110",
   "private": false,
   "license": "MIT",
   "type": "module",
   "main": "./nuxt.config.ts",
   "repository": {
     "type": "git",
-    "url": "git://github.com/viandwi24/nuxt3-awesome-starter"
+    "url": "git://github.com/vuduyviet1110/sprech-mit-uns.git"
   },
   "files": [
     "assets",
@@ -48,9 +48,12 @@
     "@vueuse/core": "^10.5.0",
     "@vueuse/nuxt": "^10.5.0",
     "bcrypt": "^6.0.0",
+    "class-variance-authority": "^0.7.1",
+    "lodash": "^4.17.21",
     "nuxt-headlessui": "^1.1.4",
     "nuxt-icon": "^0.6.1",
     "pinia": "^2.1.7",
+    "reka-ui": "^2.3.2",
     "sass": "^1.69.5",
     "stringify": "^5.2.0",
     "tailwindcss": "^3.3.5",
@@ -60,6 +63,8 @@
     "@nuxtjs/eslint-config-typescript": "^12.1.0",
     "@nuxtjs/eslint-module": "^4.1.0",
     "@types/bcrypt": "^5.0.2",
+    "@types/lodash": "^4.17.20",
+    "clsx": "^2.1.1",
     "consola": "^3.2.3",
     "eslint": "^8.52.0",
     "eslint-config-prettier": "^9.0.0",
@@ -69,6 +74,8 @@
     "prisma": "^6.10.1",
     "release-it": "^16.2.1",
     "serve": "^14.2.1",
+    "shadcn-nuxt": "^2.2.0",
+    "tailwind-merge": "^3.3.1",
     "typescript": "^5.2.2",
     "vue-tsc": "1.8.22"
   },
@@ -80,5 +87,6 @@
     "git": {
       "commitMessage": "chore(release): release v${version}"
     }
-  }
+  },
+  "packageManager": "pnpm@10.11.0+sha1.4048eeefd564ff1ab248fac3e2854d38245fe2f1"
 }

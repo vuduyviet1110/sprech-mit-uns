@@ -27,7 +27,7 @@ const randomToken = () => {
 }
 
 // state
-const username = ref('viandwi24')
+const username = ref('vuduyviet1110')
 const id = ref(randomToken())
 const enableSpamProtection = ref(false)
 const enableDirList = ref(false)

@@ -22,8 +22,13 @@ export default defineAppConfig({
               children: [
                 {
                   type: 'link',
-                  title: 'Components',
-                  to: { name: 'docs-components' },
+                  title: 'Quizz',
+                  to: { name: 'sub-menu-quizz' },
+                },
+                {
+                  type: 'link',
+                  title: 'News',
+                  to: { name: 'sub-menu-new' },
                 },
               ],
             },

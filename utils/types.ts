@@ -1,6 +1,52 @@
 import type { NuxtApp } from 'nuxt/schema'
 import type { RouteLocationRaw } from '#vue-router'
 
+export interface User {
+  id: string
+  email: string
+  passwordHash: string
+  createdAt: Date
+}
+
+export interface VocabularyWord {
+  id: string
+  word: string
+  meaning: string
+  example?: string
+  pronunciation?: string
+  type?: string
+  transcription?: string
+  imageUrl?: string
+  audioUrl?: string
+  difficulty?: 'Easy' | 'Medium' | 'Hard' | string
+  synonyms: string[]
+  antonyms: string[]
+  level?: string
+  createdAt?: Date
+  topics: any[]
+}
+
+export interface Topic {
+  id: string
+  name: string
+}
+
+export interface WordTopic {
+  id: string
+  wordId: string
+  topicId: string
+}
+
+export interface UserWordProgress {
+  id: string
+  userId: string
+  wordId: string
+  nextReviewAt: Date
+  correctCount: number
+  incorrectCount: number
+  lastReviewedAt: Date
+}
+
 export interface AwesomeLayoutPageNavbarMenuDropdownItem {
   type?: 'link'
   title?: string | ((nuxt: NuxtApp) => string)
@@ -12,16 +58,4 @@ export interface AwesomeLayoutPageNavbarMenu {
   title?: string | ((nuxt: NuxtApp) => string)
   to?: RouteLocationRaw | ((nuxt: NuxtApp) => RouteLocationRaw)
   children?: AwesomeLayoutPageNavbarMenuDropdownItem[]
-}
-
-export interface Vocabulary {
-  id: string | null
-  word: string
-  meaning: string
-  example?: string
-  level: 'A1' | 'A2' | 'B1'
-  audioUrl?: string
-  imageUrl?: string
-  transcription?: string
-  type?: string
 }

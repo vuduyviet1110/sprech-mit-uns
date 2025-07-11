@@ -5,7 +5,6 @@
         Danh sách từ vựng tiếng Đức
       </h1>
 
-      <!-- Header Controls -->
       <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
         <div
           class="flex flex-col sm:flex-row gap-4 items-center justify-between"
@@ -16,7 +15,8 @@
             >
             <select
               v-model="selectedLevel"
-              class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-0"
+              @change="onLevelChange"
             >
               <option value="">Tất cả</option>
               <option value="A1">A1</option>
@@ -25,7 +25,7 @@
             </select>
           </div>
           <div class="text-sm text-gray-600">
-            Tổng số từ: {{ vocabularies.length }}
+            Hiển thị: {{ currentTotal }} / {{ totalCount }}
           </div>
         </div>
       </div>
@@ -33,12 +33,31 @@
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div class="xl:col-span-2">
           <div class="bg-white rounded-lg shadow-sm">
-            <div class="p-4 border-b">
+            <div class="p-4 border-b flex items-center justify-between">
               <h2 class="text-xl font-semibold text-gray-800">
                 Danh sách từ vựng
+                <Icon
+                  name="tabler:refresh"
+                  @click="fetchVocabularies(true)"
+                  class="cursor-pointer hover:scale-120 transition w-5 h-5 inline-block"
+                />
               </h2>
+              <div
+                class="flex items-center border rounded-lg p-1 border-gray-300 hover:border-blue-500 transition"
+              >
+                <input
+                  v-model="search"
+                  type="text"
+                  placeholder="Tìm kiếm"
+                  class="focus:outline-none p-2"
+                />
+                <Icon
+                  name="material-symbols:search-rounded"
+                  class="w-8 h-8 inline-block"
+                />
+              </div>
             </div>
-            <div ref="scrollContainer" @scroll="onScroll">
+            <div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
                 <div
                   v-for="vocab in vocabularies"
@@ -59,12 +78,10 @@
                       {{ vocab.level }}
                     </span>
                   </div>
-
-                  <!-- Content -->
                   <div class="space-y-2 mb-3">
                     <p class="text-sm">
                       <span class="font-medium text-gray-600">Nghĩa: </span>
-                      <span class="text-gray-800"> {{ vocab.meaning }}</span>
+                      <span class="text-gray-800">{{ vocab.meaning }}</span>
                     </p>
                     <p v-if="vocab.example" class="text-sm">
                       <span class="font-medium text-gray-600">Ví dụ: </span>
@@ -78,9 +95,16 @@
                         vocab.transcription
                       }}</span>
                     </p>
+                    <p
+                      v-if="vocab.topics && vocab.topics.length"
+                      class="text-sm"
+                    >
+                      <span class="font-medium text-gray-600">Topics: </span>
+                      <span class="text-gray-800">
+                        {{ vocab.topics.map((t) => t.topic.name).join(', ') }}
+                      </span>
+                    </p>
                   </div>
-
-                  <!-- Media -->
                   <div class="flex items-center gap-3 mb-3">
                     <img
                       v-if="vocab.imageUrl"
@@ -94,8 +118,6 @@
                       </audio>
                     </div>
                   </div>
-
-                  <!-- Actions -->
                   <div class="flex gap-2">
                     <button
                       class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm flex items-center justify-center gap-1"
@@ -125,8 +147,6 @@
                       Xóa
                     </button>
                   </div>
-
-                  <!-- Error Messages -->
                   <p
                     v-if="
                       errorMessageVocab || errorMessageForm || errorMessageAudio
@@ -139,11 +159,31 @@
                   </p>
                 </div>
               </div>
+              <!-- Nút Load More -->
+              <div v-if="hasMore" class="p-4 text-center">
+                <button
+                  class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  :disabled="loading"
+                  @click="loadMoreVocabularies"
+                >
+                  {{ loading ? 'Đang tải...' : 'Tải thêm' }}
+                </button>
+              </div>
+              <!-- Thông báo khi không còn dữ liệu -->
+              <div
+                v-else-if="vocabularies.length > 0"
+                class="p-4 text-center text-gray-600"
+              >
+                Đã tải hết tất cả từ vựng
+              </div>
+              <!-- Thông báo khi không có dữ liệu -->
+              <div v-else class="p-4 text-center text-gray-600">
+                Không tìm thấy từ vựng nào
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Form Panel - Takes 1/3 width on large screens -->
         <div class="xl:col-span-1">
           <div class="bg-white rounded-lg shadow-sm sticky top-4">
             <div class="p-4 border-b">
@@ -152,7 +192,6 @@
               </h2>
             </div>
             <form class="p-4 space-y-4" @submit.prevent="saveVocabulary">
-              <!-- Basic Info -->
               <div class="grid grid-cols-1 gap-4">
                 <div>
                   <label
@@ -163,11 +202,10 @@
                   <input
                     id="word"
                     v-model="form.word"
-                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                     required
                   />
                 </div>
-
                 <div>
                   <label
                     for="meaning"
@@ -177,11 +215,10 @@
                   <input
                     id="meaning"
                     v-model="form.meaning"
-                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                     required
                   />
                 </div>
-
                 <div class="grid grid-cols-2 gap-2">
                   <div>
                     <label
@@ -192,15 +229,16 @@
                     <select
                       id="type"
                       v-model="form.type"
-                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                       required
                     >
                       <option value="noun">Noun</option>
                       <option value="verb">Verb</option>
                       <option value="adjective">Adjective</option>
+                      <option value="interjection">Interjection</option>
+                      <option value="preposition">Preposition</option>
                     </select>
                   </div>
-
                   <div>
                     <label
                       for="level"
@@ -210,7 +248,7 @@
                     <select
                       id="level"
                       v-model="form.level"
-                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                       required
                     >
                       <option value="A1">A1</option>
@@ -219,7 +257,6 @@
                     </select>
                   </div>
                 </div>
-
                 <div>
                   <label
                     for="example"
@@ -229,11 +266,10 @@
                   <textarea
                     id="example"
                     v-model="form.example"
-                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                     rows="2"
                   ></textarea>
                 </div>
-
                 <div>
                   <label
                     for="transcription"
@@ -243,11 +279,30 @@
                   <input
                     id="transcription"
                     v-model="form.transcription"
-                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                   />
                 </div>
-
-                <!-- Media URLs -->
+                <div>
+                  <label
+                    for="topics"
+                    class="block text-sm font-medium text-gray-700 mb-1"
+                    >Topics</label
+                  >
+                  <select
+                    id="topics"
+                    v-model="form.topics"
+                    multiple
+                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none h-24"
+                  >
+                    <option
+                      v-for="topic in topics"
+                      :key="topic.id"
+                      :value="topic.id"
+                    >
+                      {{ topic.name }}
+                    </option>
+                  </select>
+                </div>
                 <div class="space-y-3">
                   <div>
                     <label
@@ -258,11 +313,10 @@
                     <input
                       id="audioUrl"
                       v-model="form.audioUrl"
-                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                       placeholder="https://..."
                     />
                   </div>
-
                   <div>
                     <label
                       for="imageUrl"
@@ -272,14 +326,12 @@
                     <input
                       id="imageUrl"
                       v-model="form.imageUrl"
-                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none"
                       placeholder="https://..."
                     />
                   </div>
                 </div>
               </div>
-
-              <!-- Form Actions -->
               <div class="flex gap-2 pt-4">
                 <button
                   type="submit"
@@ -306,23 +358,37 @@
 
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
+import debounce from 'lodash/debounce'
 import { useAudioPlayback } from 'composables/vocab/use-audio-playback'
 import { useVocabularyForm } from 'composables/vocab/use-vocab-form'
 import { useVocabulary } from 'composables/vocab/use-vocabulary'
 import { useHead } from '#app'
 import { withLoading } from '~/utils/withLoading'
+
 definePageMeta({ layout: 'page', ssr: false })
 useHead({ title: 'Danh sách từ vựng' })
-const scrollContainer = ref<HTMLElement | null>(null)
+
+const topics = ref<{ id: string; name: string }[]>([])
+
+async function fetchTopics() {
+  const response = await useFetch('/api/dictionary/topic')
+  if (response.data.value) {
+    topics.value = response.data.value as { id: string; name: string }[]
+  }
+}
 
 const {
   vocabularies,
   selectedLevel,
+  search,
   errorMessage: errorMessageVocab,
   fetchVocabularies,
+  loadMoreVocabularies,
   deleteVocabulary,
   loading,
   hasMore,
+  currentTotal,
+  totalCount,
 } = useVocabulary()
 
 const {
@@ -334,6 +400,20 @@ const {
   cancelEdit,
 } = useVocabularyForm()
 
+const {
+  playingWord,
+  errorMessage: errorMessageAudio,
+  playAudioOrSpeak,
+} = useAudioPlayback()
+
+function onLevelChange() {
+  fetchVocabularies(true)
+}
+
+const debouncedFetch = debounce(() => fetchVocabularies(true), 300)
+watch(search, debouncedFetch)
+watch(selectedLevel, () => fetchVocabularies(true))
+
 watch(
   () => loading.value,
   (val) => {
@@ -341,29 +421,15 @@ watch(
   },
 )
 
-const {
-  playingWord,
-  errorMessage: errorMessageAudio,
-  playAudioOrSpeak,
-} = useAudioPlayback()
-
-watch(selectedLevel, async () => {
-  await withLoading(() => fetchVocabularies(true))
-})
-
-const onScroll = () => {
-  if (!scrollContainer.value || loading.value || !hasMore.value) return
-
-  const scrollPos =
-    scrollContainer.value.scrollTop + scrollContainer.value.clientHeight
-  const threshold = scrollContainer.value.scrollHeight - 50
-
-  if (scrollPos >= threshold) {
-    fetchVocabularies()
-  }
-}
-
 onMounted(async () => {
   await withLoading(() => fetchVocabularies(true))
+  await fetchTopics()
 })
 </script>
+
+<style scoped>
+select#topics option:checked {
+  background-color: #109679;
+  color: #e8ecf1;
+}
+</style>
