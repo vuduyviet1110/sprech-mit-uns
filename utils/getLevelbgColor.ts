@@ -64,3 +64,16 @@ export function getDifficultyColor(difficulty: string) {
       return 'bg-gray-100 text-gray-800'
   }
 }
+
+export const getTypeColor = (type: string) => {
+  switch (type) {
+    case 'noun':
+      return 'bg-blue-100 text-blue-700'
+    case 'verb':
+      return 'bg-purple-100 text-purple-700'
+    case 'adjective':
+      return 'bg-orange-100 text-orange-700'
+    default:
+      return 'bg-gray-100 text-gray-700'
+  }
+}

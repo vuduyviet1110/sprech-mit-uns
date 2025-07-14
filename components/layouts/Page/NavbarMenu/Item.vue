@@ -42,11 +42,11 @@ const props = defineProps({
       >
     </NuxtLink>
   </template>
-  <template v-else-if="menu?.type === 'button'">
+  <!-- <template v-else-if="menu?.type === 'button'">
     <AwesomeButton
       :text="parseMenuTitle(menu?.title)"
       size="xs"
       :to="parseMenuRoute(menu.to)"
     />
-  </template>
+  </template> -->
 </template>

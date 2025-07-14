@@ -15,6 +15,7 @@ export interface VocabularyWord {
   example?: string
   pronunciation?: string
   type?: string
+  paragraph?: string
   transcription?: string
   imageUrl?: string
   audioUrl?: string
@@ -38,13 +39,17 @@ export interface WordTopic {
 }
 
 export interface UserWordProgress {
-  id: string
+  id?: string
   userId: string
   wordId: string
-  nextReviewAt: Date
+  nextReviewAt?: Date
   correctCount: number
   incorrectCount: number
-  lastReviewedAt: Date
+  lastReviewedAt?: Date
+  lastCorrect: boolean
+  isMastered: boolean
+  masteryLevel: number
+  streak: number
 }
 
 export interface AwesomeLayoutPageNavbarMenuDropdownItem {

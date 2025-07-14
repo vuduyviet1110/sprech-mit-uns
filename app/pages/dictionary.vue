@@ -71,21 +71,6 @@ function clearTopic() {
 function addToVocabulary(entry: VocabularyWord) {
   console.log(`Add to vocab: ${entry.word}`)
 }
-
-const onScroll = () => {
-  if (!loading.value && hasMore.value) {
-    const scrollContainer = document.querySelector(
-      '.container',
-    ) as HTMLElement | null
-    if (scrollContainer) {
-      const scrollPos = scrollContainer.scrollTop + scrollContainer.clientHeight
-      const threshold = scrollContainer.scrollHeight - 50
-      if (scrollPos >= threshold) {
-        loadMoreVocabularies()
-      }
-    }
-  }
-}
 </script>
 
 <template>
@@ -98,7 +83,7 @@ const onScroll = () => {
       <AwesomeButtonAddTopic @created="handleTopicCreated" />
     </LayoutPageHeader>
 
-    <div class="container mx-auto px-4 py-8" @scroll="onScroll">
+    <div class="container mx-auto px-4 py-8">
       <LayoutPageSectionTitle
         text="Select a Topic"
         class="text-2xl font-semibold text-gray-800 mb-6"

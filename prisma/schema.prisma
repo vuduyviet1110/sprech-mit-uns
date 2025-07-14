@@ -16,7 +16,7 @@ model User {
   progress     UserWordProgress[]
 }
 
-model VocabularyWord  {
+model VocabularyWord {
   id             String               @id @default(uuid())
   word           String
   meaning        String
@@ -28,17 +28,27 @@ model VocabularyWord  {
   audioUrl       String?
   synonyms       String[]
   antonyms       String[]
-  level          String?
-  createdAt      DateTime             @default(now())
+  level          String?             
+  createdAt      DateTime            @default(now())
 
   topics         WordTopic[]
   userProgress   UserWordProgress[]
 }
 
 model Topic {
-  id        String       @id @default(uuid())
-  name      String       @unique
-  words     WordTopic[]
+  id              String       @id @default(uuid())
+  slug            String?      @unique 
+  name            String       @unique
+  level           String?      
+  description     String?      
+  paragraph       String?      
+  englishTranslation String?   
+  difficulty      String?      
+  estimatedTime   String?     
+  createdAt       DateTime     @default(now())
+  words           WordTopic[]  
+  @@index([level])
+  @@index([slug]) 
 }
 
 model WordTopic {
@@ -51,7 +61,6 @@ model WordTopic {
 
   @@unique([wordId, topicId])
 }
-
 
 model UserWordProgress {
   id             String   @id @default(uuid())
@@ -67,7 +76,7 @@ model UserWordProgress {
   lastReviewedAt DateTime @default(now())
   lastCorrect    Boolean  @default(false)  
   isMastered     Boolean  @default(false) 
-  masteryLevel   Int      @default(0)     // 0-5 (độ thành thạo)
+  masteryLevel   Int      @default(0)     
   streak         Int      @default(0)     
 
   @@index([userId])

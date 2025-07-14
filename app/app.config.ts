@@ -33,12 +33,14 @@ export default defineAppConfig({
               ],
             },
             { type: 'button', title: 'Setting', to: { name: 'setting' } },
+
             // dynamic title
             // {
             //   type: 'button',
             //   title: (nuxt) =>
             //     (nuxt._appConfig as AppConfigInput)?.awesome?.name || '',
-            //   to: (nuxt) => (nuxt._appConfig as AppConfigInput)?.awesome?.name || '',
+            //   to: (nuxt) =>
+            //     (nuxt._appConfig as AppConfigInput)?.awesome?.name || '',
             // },
           ],
         },

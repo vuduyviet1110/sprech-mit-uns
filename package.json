@@ -39,6 +39,7 @@
     "release": "release-it"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-vue": "^0.8.0",
     "@nuxt/content": "^2.9.0",
     "@nuxt/devtools": "^1.0.0",
     "@nuxtjs/color-mode": "^3.3.0",
@@ -48,6 +49,7 @@
     "@vueuse/core": "^10.5.0",
     "@vueuse/nuxt": "^10.5.0",
     "bcrypt": "^6.0.0",
+    "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.1",
     "lodash": "^4.17.21",
     "nuxt-headlessui": "^1.1.4",
@@ -63,6 +65,7 @@
     "@nuxtjs/eslint-config-typescript": "^12.1.0",
     "@nuxtjs/eslint-module": "^4.1.0",
     "@types/bcrypt": "^5.0.2",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/lodash": "^4.17.20",
     "clsx": "^2.1.1",
     "consola": "^3.2.3",

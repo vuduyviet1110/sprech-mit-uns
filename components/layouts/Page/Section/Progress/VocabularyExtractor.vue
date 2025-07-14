@@ -39,8 +39,8 @@
                 <Button
                   variant="outline"
                   size="sm"
-                  @click="playAudio(word.german)"
                   class="h-8 w-8 p-0"
+                  @click="playAudioOrSpeak(word)"
                 >
                   <Icon name="mdi:volume-high" class="h-4 w-4" />
                 </Button>
@@ -50,10 +50,10 @@
               <div class="space-y-2">
                 <div class="flex items-center gap-4">
                   <span class="text-xl font-bold text-blue-900">{{
-                    word.german
+                    word.word
                   }}</span>
                   <span class="text-gray-600">→</span>
-                  <span class="text-lg text-gray-800">{{ word.english }}</span>
+                  <span class="text-lg text-gray-800">{{ word.meaning }}</span>
                 </div>
                 <div class="text-sm text-gray-500">
                   IPA: {{ word.pronunciation }}
@@ -143,19 +143,60 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { getWordProgress, updateWordProgress } from '~/utils/progressUtils'
+import { useAudioPlayback } from '~/composables/vocab/use-audio-playback'
 
 const props = defineProps<{ paragraph: string; topicId: string }>()
 
 const vocabularyData = [
   {
     id: 'fahre',
-    german: 'fahre',
-    english: 'drive/travel',
+    word: 'fahre',
+    meaning: 'drive/travel',
     type: 'verb',
     pronunciation: '/ˈfaːrə/',
     difficulty: 'easy',
     example: 'Ich fahre mit dem Zug.',
     exampleTranslation: 'I travel by train.',
+  },
+  {
+    id: 'haus',
+    word: 'Haus',
+    meaning: 'house',
+    type: 'noun',
+    pronunciation: '/haʊs/',
+    difficulty: 'medium',
+    example: 'Das Haus ist groß.',
+    exampleTranslation: 'The house is big.',
+  },
+  {
+    id: 'schnell',
+    word: 'schnell',
+    meaning: 'fast',
+    type: 'adjective',
+    pronunciation: '/ʃnɛl/',
+    difficulty: 'easy',
+    example: 'Der Zug ist schnell.',
+    exampleTranslation: 'The train is fast.',
+  },
+  {
+    id: 'lernen',
+    word: 'lernen',
+    meaning: 'to learn',
+    type: 'verb',
+    pronunciation: '/ˈlɛrnən/',
+    difficulty: 'medium',
+    example: 'Ich lerne Deutsch.',
+    exampleTranslation: 'I am learning word.',
+  },
+  {
+    id: 'gehen',
+    word: 'gehen',
+    meaning: 'to go',
+    type: 'verb',
+    pronunciation: '/ˈɡeːən/',
+    difficulty: 'hard',
+    example: 'Wir gehen nach Hause.',
+    exampleTranslation: 'We are going home.',
   },
 ]
 
@@ -219,35 +260,11 @@ function handleWordAction(
   wordsProgress.value[wordId] = updated
 }
 
-const playAudio = (text: string) => {
-  console.log(`Playing audio for: ${text}`)
-}
-
-const getDifficultyColor = (difficulty: string) => {
-  switch (difficulty) {
-    case 'easy':
-      return 'bg-green-100 text-green-700'
-    case 'medium':
-      return 'bg-yellow-100 text-yellow-700'
-    case 'hard':
-      return 'bg-red-100 text-red-700'
-    default:
-      return 'bg-gray-100 text-gray-700'
-  }
-}
-
-const getTypeColor = (type: string) => {
-  switch (type) {
-    case 'noun':
-      return 'bg-blue-100 text-blue-700'
-    case 'verb':
-      return 'bg-purple-100 text-purple-700'
-    case 'adjective':
-      return 'bg-orange-100 text-orange-700'
-    default:
-      return 'bg-gray-100 text-gray-700'
-  }
-}
+const {
+  playingWord,
+  errorMessage: errorMessageAudio,
+  playAudioOrSpeak,
+} = useAudioPlayback()
 
 const isLearning = (wordId: string) => {
   const progress = wordsProgress.value[wordId]

@@ -1,24 +1,10 @@
-// Progress tracking utilities
-// In a real app, this would connect to your database
+// Get api from db
 
-export interface UserWordProgress {
-  id?: string
-  userId: string
-  wordId: string
-  nextReviewAt?: Date
-  correctCount: number
-  incorrectCount: number
-  lastReviewedAt?: Date
-  lastCorrect: boolean
-  isMastered: boolean
-  masteryLevel: number
-  streak: number
-}
+import type { UserWordProgress } from './types'
 
-// Local storage keys
 const PROGRESS_KEY = 'german_learning_progress'
 
-// Get all user progress from localStorage
+// Get all user progress
 const getAllProgress = (): Record<string, UserWordProgress> => {
   try {
     const stored = localStorage.getItem(PROGRESS_KEY)
@@ -39,25 +25,18 @@ const saveAllProgress = (progress: Record<string, UserWordProgress>) => {
 }
 
 // Get progress for a specific word
-export const getWordProgress = (userId: string, wordId: string): any => {
-  const allProgress = getAllProgress()
-  const key = `${userId}-${wordId}`
-
-  const progress = allProgress[key]
-  if (progress) {
-    // Convert date strings back to Date objects
-    return {
-      ...progress,
-      nextReviewAt: progress.nextReviewAt
-        ? new Date(progress.nextReviewAt)
-        : undefined,
-      lastReviewedAt: progress.lastReviewedAt
-        ? new Date(progress.lastReviewedAt)
-        : undefined,
-    }
+export function getWordProgress(userId: string, wordId: string) {
+  const fake = {
+    correctCount: Math.floor(Math.random() * 5),
+    incorrectCount: Math.floor(Math.random() * 3),
+    streak: Math.floor(Math.random() * 4),
+    masteryLevel: Math.floor(Math.random() * 6),
+    isMastered: Math.random() > 0.8,
+    lastCorrect: Math.random() > 0.5,
+    nextReviewAt: new Date(),
+    lastReviewedAt: new Date(),
   }
-
-  return null
+  return fake
 }
 
 // Update progress for a specific word

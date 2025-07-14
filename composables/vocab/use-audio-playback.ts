@@ -1,15 +1,30 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-
-interface Vocabulary {
-  word: string
-  audioUrl?: string
-}
+import { useSpeechRecognition } from '@vueuse/core'
+import { onNuxtReady } from '#app'
 
 export function useAudioPlayback() {
   const playingWord = ref<string | null>(null)
   const errorMessage = ref<string>('')
+
+  const {
+    isSupported,
+    isListening: isRecognizing,
+    result: recognizedText,
+    start: startRecognition,
+    stop: stopRecognition,
+    error: recognitionError,
+  } = useSpeechRecognition({
+    lang: 'de-DE',
+    interimResults: false,
+    continuous: false,
+  })
+
   const loadVoices = () => {
     return new Promise<void>((resolve) => {
+      if (typeof window === 'undefined') {
+        resolve()
+        return
+      }
       const voices = speechSynthesis.getVoices()
       if (voices.length > 0) {
         resolve()
@@ -21,8 +36,24 @@ export function useAudioPlayback() {
     })
   }
 
-  const playAudioOrSpeak = (vocab: Vocabulary) => {
-    playingWord.value = vocab.word
+  const playAudioOrSpeak = (vocab: {
+    word?: string
+    paragraph?: string
+    audioUrl?: string
+  }) => {
+    if (typeof window === 'undefined') {
+      errorMessage.value = 'Không thể phát âm thanh trên server'
+      return
+    }
+
+    const toSpeak = vocab.word || vocab.paragraph || ''
+
+    if (!toSpeak) {
+      errorMessage.value = 'Không có nội dung để đọc'
+      return
+    }
+
+    playingWord.value = toSpeak
     errorMessage.value = ''
 
     if (vocab.audioUrl) {
@@ -41,7 +72,8 @@ export function useAudioPlayback() {
     } else {
       try {
         speechSynthesis.cancel()
-        const utterance = new SpeechSynthesisUtterance(vocab.word)
+
+        const utterance = new SpeechSynthesisUtterance(toSpeak)
         utterance.lang = 'de-DE'
         utterance.rate = 1
         utterance.pitch = 1
@@ -69,19 +101,41 @@ export function useAudioPlayback() {
     }
   }
 
-  onMounted(async () => {
-    if (typeof window !== 'undefined') {
-      await loadVoices()
+  // Handle recognition errors
+  watch(recognitionError, (err) => {
+    if (err) {
+      errorMessage.value = `Lỗi nhận diện giọng nói: ${err.message}`
     }
   })
 
+  // Check if speech recognition is supported
+  watchEffect(() => {
+    if (!isSupported.value) {
+      errorMessage.value = 'Trình duyệt không hỗ trợ nhận diện giọng nói'
+    }
+  })
+
+  onMounted(() => {
+    onNuxtReady(async () => {
+      await loadVoices()
+    })
+  })
+
   onUnmounted(() => {
-    speechSynthesis.cancel()
+    if (typeof window !== 'undefined') {
+      speechSynthesis.cancel()
+      stopRecognition()
+    }
   })
 
   return {
     playingWord,
     errorMessage,
+    recognizedText,
+    isRecognizing,
+    startRecognition,
+    stopRecognition,
     playAudioOrSpeak,
+    isSupported,
   }
 }

@@ -42,6 +42,7 @@ const menus = computed(
           >
             <Icon name="mdi:github-face" />
           </AwesomeLink>
+          <LayoutPageNavbarDropdownUser />
         </div>
       </div>
 

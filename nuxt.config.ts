@@ -43,6 +43,11 @@ export default defineNuxtConfig({
       autoprefixer: {},
     },
   },
+  vue: {
+    compilerOptions: {
+      isCustomElement: (tag) => tag.startsWith('dotlottie-player'),
+    },
+  },
   components: [
     { path: resolve('./components/layouts'), prefix: 'Layout', global: true },
     { path: resolve('./components/awesome'), prefix: 'Awesome', global: true },
