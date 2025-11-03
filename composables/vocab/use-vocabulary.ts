@@ -1,112 +1,133 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { VocabularyWord } from '~/utils/types'
-import { withLoading } from '~/utils/withLoading'
 
 export function useVocabulary() {
   const vocabularies = ref<VocabularyWord[]>([])
-  const selectedLevel = ref<string>('')
+  const selectedLevel = ref('')
   const selectedTopic = ref<string | null>(null)
-  const search = ref<string>('')
-  const errorMessage = ref<string>('')
+  const search = ref('')
   const page = ref(1)
   const limit = 10
+  const selectedDate = ref<
+    'today' | 'yesterday' | 'last_3_days' | 'this_week' | ''
+  >('')
   const hasMore = ref(true)
-  const loading = ref(false)
   const totalCount = ref(0)
   const currentTotal = ref(0)
+  const errorMessage = ref('')
+  const loading = ref(false)
+  const loadingMore = ref(false)
+  const initialLoading = ref(true)
+
   const queryParams = computed(() => ({
     level: selectedLevel.value || undefined,
     topic: selectedTopic.value || undefined,
-    search: search.value || undefined,
+    date: selectedDate.value || undefined,
     page: page.value,
     limit,
   }))
 
-  const { data, pending, error, refresh } = useFetch('/api/dictionary', {
-    query: queryParams,
-    server: false,
-    watch: [
-      computed(() => ({
-        level: selectedLevel.value,
-        topic: selectedTopic.value,
-        search: search.value,
-      })),
-    ],
-    transform: (response: {
-      items: VocabularyWord[]
-      meta: { hasMore: boolean; totalCount: number; currentTotal: number }
-    }) => {
-      hasMore.value = response.meta.hasMore
-      totalCount.value = response.meta.totalCount
-      currentTotal.value = response.meta.currentTotal
-      return response.items
-    },
-    onResponseError: ({ response }) => {
-      errorMessage.value = 'Lỗi khi tải danh sách từ vựng'
-      console.error('Fetch error:', response._data)
-    },
-  })
+  const fetchVocabularies = async (reset = false, searchQuery = '') => {
+    if (loading.value || loadingMore.value) return
 
-  watch(data, (newData) => {
-    if (newData) {
-      vocabularies.value =
-        page.value === 1 ? newData : [...vocabularies.value, ...newData]
-    }
-  })
-
-  const fetchVocabularies = async (reset = false) => {
-    if (loading.value || pending.value) return
+    const isInitialLoad = reset && vocabularies.value.length === 0
+    const isLoadMore = !reset && page.value > 1
 
     if (reset) {
       vocabularies.value = []
       page.value = 1
       hasMore.value = true
+      if (isInitialLoad) {
+        initialLoading.value = true
+      } else {
+        loading.value = true
+      }
+    } else if (isLoadMore) {
+      loadingMore.value = true
+    } else {
+      loading.value = true
     }
 
-    loading.value = true
-    await refresh()
-    loading.value = false
+    try {
+      const params = {
+        ...queryParams.value,
+        search: searchQuery || search.value || undefined,
+      }
+
+      const response = await $fetch<{
+        items: VocabularyWord[]
+        meta: { hasMore: boolean; totalCount: number; currentTotal: number }
+      }>('/api/dictionary', {
+        query: params as any,
+      })
+
+      hasMore.value = response.meta.hasMore
+      totalCount.value = response.meta.totalCount
+      currentTotal.value = response.meta.currentTotal
+
+      if (reset) {
+        vocabularies.value = response.items
+      } else {
+        vocabularies.value = [...vocabularies.value, ...response.items]
+      }
+
+      errorMessage.value = ''
+    } catch (err) {
+      errorMessage.value = 'Không thể tải dữ liệu từ vựng'
+      console.error('Error fetching vocabularies:', err)
+    } finally {
+      loading.value = false
+      loadingMore.value = false
+      initialLoading.value = false
+    }
   }
 
   const deleteVocabulary = async (id: string) => {
     if (!confirm('Bạn có chắc muốn xóa từ này?')) return
 
     try {
-      await withLoading(() =>
-        $fetch<{ success: boolean }>(`/api/vocabulary/${id}`, {
-          method: 'DELETE',
-        }),
-      )
-
-      errorMessage.value = ''
+      loading.value = true
+      await $fetch(`/api/vocabulary/${id}`, { method: 'DELETE' })
       await fetchVocabularies(true)
     } catch (err) {
       errorMessage.value = 'Lỗi khi xóa từ vựng'
-      console.error('Delete error:', err)
+    } finally {
+      loading.value = false
     }
   }
 
+  const triggerSearch = useDebounceFn(async () => {
+    await fetchVocabularies(true, search.value)
+  }, 500)
+
   const loadMoreVocabularies = async () => {
-    if (loading.value || !hasMore.value) return
+    if (loading.value || loadingMore.value || !hasMore.value) return
     page.value += 1
     await fetchVocabularies(false)
   }
+
+  watch([selectedLevel, selectedTopic, selectedDate], () => {
+    fetchVocabularies(true)
+  })
 
   return {
     vocabularies,
     selectedLevel,
     selectedTopic,
+    selectedDate,
     search,
     errorMessage,
     page,
     limit,
-    loading,
     hasMore,
     totalCount,
     currentTotal,
+    loading,
+    loadingMore,
+    initialLoading,
     fetchVocabularies,
     loadMoreVocabularies,
     deleteVocabulary,
-    refresh,
+    triggerSearch,
   }
 }

@@ -50,6 +50,7 @@ const validate = async () => {
       id: string
     }
     alert(`Found Accout Name ${data.name} with id : ${data.id}`)
+    console.log(data)
   } catch (err) {
     alert(err)
   }

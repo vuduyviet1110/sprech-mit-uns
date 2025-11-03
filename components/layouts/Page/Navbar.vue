@@ -14,9 +14,7 @@ const menus = computed(
   <header
     class="fixed top-0 w-full z-40 border-b border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/60 backdrop-blur"
   >
-    <div
-      class="max-w-screen-2xl mx-auto flex items-center justify-between px-4 py-4"
-    >
+    <div class="mx-8 flex items-center justify-between px-4 py-4">
       <NuxtLink to="/" class="text-primary-600 font-bold text-lg capitalize">
         {{ awesome.name }}
       </NuxtLink>

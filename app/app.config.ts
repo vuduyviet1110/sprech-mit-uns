@@ -18,7 +18,7 @@ export default defineAppConfig({
             { type: 'link', title: 'Vocabulary', to: { name: 'vocabulary' } },
             {
               type: 'dropdown',
-              title: 'Documentations',
+              title: 'Practice',
               children: [
                 {
                   type: 'link',
