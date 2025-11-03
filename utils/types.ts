@@ -37,6 +37,11 @@ export interface WordTopic {
   wordId: string
   topicId: string
 }
+export interface QuizQuestion {
+  question: string
+  answers: string[]
+  correctAnswerIndex: number
+}
 
 export interface UserWordProgress {
   id?: string

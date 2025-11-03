@@ -2,10 +2,10 @@
 import { ref, computed } from 'vue'
 import confetti from 'canvas-confetti'
 
-const sentence = 'Ich ___ ein ___ Buch.'
-const options = ['habe', 'das', 'ein', 'lesen']
+const sentence = 'Ich ___ ein Buch ___.'
+const options = ['lese', 'habe', 'das', 'gerne']
 const blanksCount = 2
-const correctAnswers = ['habe', 'ein']
+const correctAnswers = ['lese', 'gerne']
 
 const filledWords = ref<string[]>(Array(blanksCount).fill(''))
 const selectedOptions = ref<string[]>([])
