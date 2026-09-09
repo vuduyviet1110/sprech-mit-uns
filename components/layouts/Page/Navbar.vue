@@ -29,9 +29,7 @@ const menus = computed(
         </div>
 
         <div class="flex items-center gap-3 text-xl pl-4">
-          <AwesomeLink class="text-gray-500 hover:text-gray-800">
-            <Icon name="la:language" />
-          </AwesomeLink>
+          <LayoutPageNavbarDropdownLanguageSwitcher />
           <LayoutPageNavbarDropdownThemeSwitcher />
           <AwesomeLink
             v-if="awesome?.project?.links?.github"

@@ -13,8 +13,9 @@ export default defineEventHandler(async (event) => {
   if (method === 'GET') {
     try {
       return await getTopicDetails(id, userId as string)
-    } catch (error) {
-      throw createError({ statusCode: 500, message: 'Internal server error' })
+    } catch (error: any) {
+      console.error('Error in getTopicDetails:', error)
+      throw createError({ statusCode: 500, message: error.message || 'Internal server error' })
     }
   }
 

@@ -1,9 +1,8 @@
 export function useTopic() {
   const create = (name: string) => {
-    return useFetch('/api/dictionary/topic', {
+    return $fetch('/api/dictionary/topic', {
       method: 'POST',
       body: { name },
-      immediate: false,
     })
   }
 

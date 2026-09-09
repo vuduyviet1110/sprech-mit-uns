@@ -1,23 +1,56 @@
-import { PrismaClient } from '@prisma/client'
-import { defineEventHandler, readBody, getQuery, getRouterParam } from 'h3'
-
-const prisma = new PrismaClient()
+import { prisma } from '~/server/ultis/prisma'
+import { defineEventHandler, readBody, getQuery, createError, sendError } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
 
   try {
-    // GET: Lấy tất cả topic
+    // GET: Lấy tất cả topic (lọc theo ?lang=de hoặc ?lang=cs)
     if (method === 'GET') {
-      return await prisma.topic.findMany({
+      const query = getQuery(event)
+      const lang = query.lang as string
+
+      const allTopics = await prisma.topic.findMany({
         select: {
           id: true,
           name: true,
+          slug: true,
+          level: true,
+          description: true,
+          words: {
+            select: {
+              word: {
+                select: {
+                  id: true,
+                  word: true,
+                  type: true,
+                  pronunciation: true,
+                  meaning: true,
+                  example: true,
+                  audioUrl: true,
+                  level: true,
+                },
+              },
+            },
+          },
         },
         orderBy: {
           name: 'asc',
         },
       })
+
+      const formattedTopics = allTopics.map((t) => ({
+        ...t,
+        words: t.words.map((w) => w.word).filter(Boolean),
+      }))
+
+      if (lang === 'cs') {
+        return formattedTopics.filter((t) => t.slug?.endsWith('-cs') || t.name.includes('(Tiếng Séc)'))
+      } else if (lang === 'de') {
+        return formattedTopics.filter((t) => !t.slug?.endsWith('-cs') && !t.name.includes('(Tiếng Séc)'))
+      }
+
+      return formattedTopics
     }
 
     // POST: Tạo topic mới
@@ -30,9 +63,20 @@ export default defineEventHandler(async (event) => {
         )
       }
 
-      const created = await prisma.topic.create({
-        data: {
-          name: body.name,
+      const name = body.name.trim()
+      const slug = body.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `topic-${Date.now()}`
+
+      const created = await prisma.topic.upsert({
+        where: { name },
+        update: {
+          level: body.level || undefined,
+          description: body.description || undefined,
+        },
+        create: {
+          name,
+          slug,
+          level: body.level || 'A1',
+          description: body.description || '',
         },
       })
 

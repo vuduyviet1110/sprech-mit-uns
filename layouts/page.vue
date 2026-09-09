@@ -1,5 +1,5 @@
 <template>
-  <div class="overflow-x-hidden">
+  <div class="overflow-x-clip">
     <LayoutPageNavbar class="h-[64px] max-h-[64px]" />
     <LayoutPageContent>
       <slot />

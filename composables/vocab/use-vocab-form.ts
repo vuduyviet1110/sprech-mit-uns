@@ -17,7 +17,11 @@ export function useVocabularyForm() {
     topics: [],
   })
 
+  const viMeaning = ref('')
+  const enMeaning = ref('')
+
   const editing = ref(false)
+  const isFormOpen = ref(false)
   const errorMessage = ref('')
   const isLoading = ref(false)
 
@@ -38,14 +42,53 @@ export function useVocabularyForm() {
       antonyms: [],
       topics: [],
     }
+    viMeaning.value = ''
+    enMeaning.value = ''
   }
 
+  const toggleForm = () => {
+    if (isFormOpen.value && editing.value) {
+      resetForm()
+      editing.value = false
+    } else if (!isFormOpen.value) {
+      resetForm()
+      editing.value = false
+      isFormOpen.value = true
+    } else {
+      isFormOpen.value = false
+    }
+  }
+
+  const closeForm = () => {
+    resetForm()
+    editing.value = false
+    isFormOpen.value = false
+  }
+
+  const { currentLanguage } = useLanguage()
+
   const saveVocabulary = async () => {
+    // Combine viMeaning & enMeaning into standard meaning format: "VN <vi> • GB <en>" or single meaning
+    if (viMeaning.value.trim() || enMeaning.value.trim()) {
+      const parts: string[] = []
+      if (viMeaning.value.trim()) {
+        parts.push(`VN ${viMeaning.value.trim()}`)
+      }
+      if (enMeaning.value.trim()) {
+        parts.push(`GB ${enMeaning.value.trim()}`)
+      }
+      form.value.meaning = parts.join(' • ')
+    }
+
+    const topicIds = (form.value.topics || []).map((t: any) =>
+      typeof t === 'string' ? t : t?.topicId || t?.id,
+    ).filter(Boolean)
+
     const payload = {
       ...form.value,
-      topicIds: form.value.topics.map((t) =>
-        typeof t === 'string' ? t : t.id,
-      ),
+      language: form.value.language || currentLanguage.value,
+      wordType: form.value.type,
+      topicIds,
     }
 
     const url = editing.value
@@ -58,7 +101,7 @@ export function useVocabularyForm() {
       await $fetch(url, { method, body: payload })
       resetForm()
       editing.value = false
-      selectedLevel.value = ''
+      isFormOpen.value = false
       errorMessage.value = ''
       await fetchVocabularies(true)
     } catch (error) {
@@ -73,20 +116,43 @@ export function useVocabularyForm() {
     editing.value = true
     form.value = {
       ...vocab,
-      topics: vocab.topics?.map((t) => t.topicId) || [],
+      topics: vocab.topics?.map((t: any) =>
+        typeof t === 'string' ? t : t.topicId || t.topic?.id || t.id,
+      ) || [],
     }
+
+    // Extract VN and GB meaning parts from vocab.meaning string
+    if (vocab.meaning) {
+      if (vocab.meaning.includes('•')) {
+        const parts = vocab.meaning.split('•')
+        viMeaning.value = parts[0].replace(/VN\s*/i, '').replace(/🇻🇳/g, '').trim()
+        enMeaning.value = parts[1].replace(/GB\s*/i, '').replace(/🇬🇧/g, '').trim()
+      } else {
+        viMeaning.value = vocab.meaning.replace(/VN\s*/i, '').replace(/🇻🇳/g, '').trim()
+        enMeaning.value = ''
+      }
+    } else {
+      viMeaning.value = ''
+      enMeaning.value = ''
+    }
+
+    isFormOpen.value = true
   }
 
   const cancelEdit = () => {
-    resetForm()
-    editing.value = false
+    closeForm()
   }
 
   return {
     form,
+    viMeaning,
+    enMeaning,
     editing,
+    isFormOpen,
     isLoading,
     errorMessage,
+    toggleForm,
+    closeForm,
     saveVocabulary,
     editVocabulary,
     cancelEdit,

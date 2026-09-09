@@ -75,10 +75,10 @@
                 v-if="wordsProgress[word.id]"
                 class="flex items-center gap-4 text-xs text-gray-600"
               >
-                <span>✓ {{ wordsProgress[word.id].correctCount }}</span>
-                <span>✗ {{ wordsProgress[word.id].incorrectCount }}</span>
-                <span>🔥 {{ wordsProgress[word.id].streak }}</span>
-                <span>⭐ Lv.{{ wordsProgress[word.id].masteryLevel }}</span>
+                <span class="inline-flex items-center gap-1"><Icon name="heroicons:check" class="w-3.5 h-3.5 text-emerald-500" /> {{ wordsProgress[word.id].correctCount }}</span>
+                <span class="inline-flex items-center gap-1"><Icon name="heroicons:x-mark" class="w-3.5 h-3.5 text-red-500" /> {{ wordsProgress[word.id].incorrectCount }}</span>
+                <span class="inline-flex items-center gap-1"><Icon name="heroicons:fire-20-solid" class="w-3.5 h-3.5 text-orange-500" /> {{ wordsProgress[word.id].streak }}</span>
+                <span class="inline-flex items-center gap-1"><Icon name="heroicons:star-20-solid" class="w-3.5 h-3.5 text-amber-400" /> Lv.{{ wordsProgress[word.id].masteryLevel }}</span>
               </div>
 
               <!-- Action Buttons -->

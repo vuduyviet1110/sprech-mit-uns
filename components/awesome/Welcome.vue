@@ -53,7 +53,7 @@ const leadingsText = computed(() => [
             <span class="animated-text-fg">{{ item.text }}</span>
           </span>
         </h1>
-        <div class="px-4 mt-6 text-center max-w-[500px] md:max-w-[600px]">
+        <div class="px-4 mt-6 text-center max-w-[500px] md:max-w-[600px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
           {{
             awesome?.description ||
             'a starter template for Nuxt 3 with minimalist themes design, built in components, drawer & menus, and more.'

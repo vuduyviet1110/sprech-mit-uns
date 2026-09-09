@@ -9,3 +9,8 @@ dist
 .DS_Store
 
 /generated/prisma
+
+# IDE & Editor files
+.vscode/
+.idea/
+

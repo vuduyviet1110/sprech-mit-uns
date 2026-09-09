@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '~/server/ultis/prisma'
 
 export default defineEventHandler(async (event) => {
   const id = String(event?.context?.params?.id || '')
@@ -38,12 +36,14 @@ export default defineEventHandler(async (event) => {
       audioUrl,
       synonyms,
       imageUrl,
-      wordType: type,
+      type: bodyType,
+      wordType,
       antonyms,
       level,
       topicIds = [],
       topicNames = [],
     } = body
+    const type = bodyType || wordType
 
     try {
       // Tạo các topic mới nếu cần

@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '~/server/ultis/prisma'
 import { defineEventHandler, getQuery, readBody, createError } from 'h3'
-
-const prisma = new PrismaClient()
 
 export default defineEventHandler((event) => {
   const method = event.node.req.method
@@ -25,6 +23,7 @@ async function handleGet(event: any) {
     search,
     topic,
     level,
+    language,
     date,
     page = '1',
     limit = '10',
@@ -96,6 +95,7 @@ async function handleGet(event: any) {
       },
     }),
     ...(level && { level: level.toString() }),
+    ...(language && { language: language.toString() }),
     ...(topic && {
       topics: {
         some: {
@@ -144,6 +144,7 @@ async function handlePost(event: any) {
     meaning,
     pronunciation,
     transcription,
+    type: bodyType,
     wordType,
     example,
     audioUrl,
@@ -153,13 +154,14 @@ async function handlePost(event: any) {
     level,
     topicIds = [],
   } = body
+  const type = bodyType || wordType
 
   return prisma.vocabularyWord.create({
     data: {
       word,
       meaning,
       pronunciation,
-      type: wordType,
+      type,
       example,
       audioUrl,
       synonyms,

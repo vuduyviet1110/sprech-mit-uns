@@ -12,36 +12,31 @@ export default defineAppConfig({
       page: {
         navbar: {
           menus: [
-            { type: 'link', title: 'Lessons', to: { name: 'lesson' } },
-            { type: 'link', title: 'Dictionary', to: { name: 'dictionary' } },
-            { type: 'link', title: 'Progress', to: { name: 'progress' } },
-            { type: 'link', title: 'Vocabulary', to: { name: 'vocabulary' } },
+            { type: 'link', title: 'Học bài', to: '/progress' },
+            { type: 'link', title: 'Từ điển', to: '/dictionary' },
+            { type: 'link', title: 'Sổ từ vựng', to: '/vocabulary' },
+            { type: 'link', title: 'Ôn tập SRS', to: '/review' },
             {
               type: 'dropdown',
-              title: 'Practice',
+              title: 'Luyện tập',
               children: [
                 {
                   type: 'link',
-                  title: 'Quizz',
-                  to: { name: 'sub-menu-quizz' },
+                  title: 'Đấu trường Quiz 60s',
+                  to: '/sub-menu/quizz',
                 },
                 {
                   type: 'link',
-                  title: 'News',
-                  to: { name: 'sub-menu-new' },
+                  title: 'YouTube Dictation',
+                  to: '/sub-menu/youtube',
+                },
+                {
+                  type: 'link',
+                  title: 'Tin tức & SRS Reader',
+                  to: '/sub-menu/news',
                 },
               ],
             },
-            { type: 'button', title: 'Setting', to: { name: 'setting' } },
-
-            // dynamic title
-            // {
-            //   type: 'button',
-            //   title: (nuxt) =>
-            //     (nuxt._appConfig as AppConfigInput)?.awesome?.name || '',
-            //   to: (nuxt) =>
-            //     (nuxt._appConfig as AppConfigInput)?.awesome?.name || '',
-            // },
           ],
         },
       },

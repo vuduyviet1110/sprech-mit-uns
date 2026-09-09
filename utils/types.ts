@@ -23,6 +23,7 @@ export interface VocabularyWord {
   synonyms: string[]
   antonyms: string[]
   level?: string
+  language?: string
   createdAt?: Date
   topics: any[]
 }

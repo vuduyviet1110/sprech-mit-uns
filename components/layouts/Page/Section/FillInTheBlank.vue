@@ -102,8 +102,8 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div class="space-y-6 text-center max-w-xl mx-auto relative">
-    <p class="text-lg font-semibold">
+  <div class="space-y-6 text-center max-w-xl mx-auto relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-8 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-colors">
+    <p class="text-xl font-bold text-slate-800 dark:text-slate-100">
       <span v-html="fullSentence" />
     </p>
 
@@ -111,25 +111,25 @@ const handleSubmit = () => {
       <div
         v-for="(word, i) in filledWords"
         :key="i"
-        class="border border-blue-400 px-4 py-2 rounded-md min-w-[100px] cursor-pointer"
+        class="border border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-slate-800/80 px-4 py-2 rounded-xl min-w-[110px] cursor-pointer shadow-xs transition-colors"
         @drop="handleDrop($event, i)"
         @dragover="handleDragOver"
         @click="handleRemove(i)"
       >
         <input
           v-model="filledWords[i]"
-          class="w-full text-center bg-transparent outline-none"
+          class="w-full text-center bg-transparent outline-none font-bold text-blue-900 dark:text-blue-300"
           placeholder="___"
           @input="handleInput(i, $event.target?.value || '')"
         />
       </div>
     </div>
 
-    <div class="flex flex-wrap justify-center gap-2 mt-4">
+    <div class="flex flex-wrap justify-center gap-3 mt-4">
       <button
         v-for="(word, i) in options"
         :key="i"
-        class="bg-blue-100 text-blue-800 px-4 py-2 rounded-md disabled:opacity-40"
+        class="bg-blue-100 dark:bg-slate-800 text-blue-900 dark:text-blue-300 border border-blue-200 dark:border-slate-700 px-4 py-2.5 rounded-xl font-semibold shadow-xs disabled:opacity-30 hover:bg-blue-200 dark:hover:bg-slate-700 transition-colors"
         draggable="true"
         :disabled="selectedOptions.includes(word)"
         @click="handleSelect(word)"
@@ -139,9 +139,9 @@ const handleSubmit = () => {
       </button>
     </div>
 
-    <div class="mt-4">
+    <div class="mt-6">
       <button
-        class="bg-green-600 text-white px-6 py-3 rounded-lg disabled:opacity-40"
+        class="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-bold px-8 py-3 rounded-xl disabled:opacity-40 shadow-md transition-all"
         :disabled="!isComplete"
         @click="handleSubmit"
       >

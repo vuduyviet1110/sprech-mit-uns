@@ -36,11 +36,14 @@ export function useAudioPlayback() {
     })
   }
 
-  const playAudioOrSpeak = (vocab: {
-    word?: string
-    paragraph?: string
-    audioUrl?: string
-  }) => {
+  const playAudioOrSpeak = (
+    vocab: {
+      word?: string
+      paragraph?: string
+      audioUrl?: string
+      lang?: string
+    }
+  ) => {
     if (typeof window === 'undefined') {
       errorMessage.value = 'Không thể phát âm thanh trên server'
       return
@@ -73,18 +76,16 @@ export function useAudioPlayback() {
       try {
         speechSynthesis.cancel()
 
+        const targetLang = vocab.lang || 'de-DE'
         const utterance = new SpeechSynthesisUtterance(toSpeak)
-        utterance.lang = 'de-DE'
-        utterance.rate = 1
+        utterance.lang = targetLang
+        utterance.rate = 0.9
         utterance.pitch = 1
 
         const voices = speechSynthesis.getVoices()
-        const germanVoice = voices.find((v) => v.lang === 'de-DE')
-        if (germanVoice) {
-          utterance.voice = germanVoice
-        } else {
-          errorMessage.value =
-            'Không tìm thấy giọng tiếng Đức, sử dụng giọng mặc định'
+        const matchingVoice = voices.find((v) => v.lang.startsWith(targetLang.split('-')[0]))
+        if (matchingVoice) {
+          utterance.voice = matchingVoice
         }
 
         utterance.onend = () => (playingWord.value = null)

@@ -58,8 +58,9 @@
                   />
                 </div>
 
-                <p v-if="error" class="text-red-500 text-sm mt-1">
-                  ❌ Failed to add topic.
+                <p v-if="error" class="text-red-500 text-sm mt-1 flex items-center gap-1">
+                  <Icon name="heroicons:x-circle-20-solid" class="w-4 h-4 text-red-500" />
+                  <span>Failed to add topic.</span>
                 </p>
 
                 <div class="mt-4 flex justify-end gap-2">
@@ -104,19 +105,23 @@ const isOpen = ref(false)
 const topicName = ref('')
 
 const { create } = useTopic()
-const error = ref()
-const pending = ref(null)
+const error = ref<any>(null)
+const pending = ref(false)
 
 const submit = async () => {
-  const { data, error: err, execute } = create(topicName.value)
-  await execute()
-
-  if (!err.value) {
+  if (!topicName.value.trim()) return
+  pending.value = true
+  error.value = null
+  try {
+    await create(topicName.value.trim())
     topicName.value = ''
     isOpen.value = false
     emit('created')
-  } else {
-    console.error('Failed to create:', err.value)
+  } catch (err: any) {
+    console.error('Failed to create topic:', err)
+    error.value = err
+  } finally {
+    pending.value = false
   }
 }
 </script>

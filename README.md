@@ -1,138 +1,43 @@
-[![Alpine](./assets/images/banner.png)](https://nuxt3-awesome-starter.vercel.app/)
+# Sprech Mit Uns - Nền Tảng Học Tiếng Đức Trực Tuyến & Hỗ Trợ Tiếng Séc
 
-# Nuxt 3 Awesome Starter
-![npm](https://img.shields.io/npm/v/%40nuxt-awesome%2Ftheme)
-![NPM](https://img.shields.io/npm/l/%40nuxt-awesome%2Ftheme)
-![npm](https://img.shields.io/npm/dm/%40nuxt-awesome/theme)
+> **Sprech Mit Uns** là ứng dụng web học ngoại ngữ thông minh tích hợp từ điển song ngữ (Đức - Séc) quy mô lớn chuẩn 100% từ vựng thực tế (**2,376+ từ tiếng Séc thông dụng hỗ trợ dịch song ngữ Tiếng Việt & Tiếng Anh 🇬🇧 & 200+ từ tiếng Đức**), ôn tập Spaced Repetition (SRS Flashcards), luyện gõ chính tả YouTube Dictation, cào tin tức báo tiếng Đức và hệ thống trắc nghiệm ngữ cảnh.
 
-a Nuxt 3 starter template with a lot of useful features, integrated with TailwindCSS 3. Easy use and implemented in Nuxt Layer, you can extend this template with zero config.  
-Nuxt Awesome Starter v2 brings many changes, separating core component apps and main business logic into the `/app` folder. and also provides the option to also be integrated with the nuxt layer to make it easier to bring all of our Awesome features and components to your project.  
+---
 
+## 🚀 Các Tính Năng Nổi Bật (Features Summary)
 
-- 📖&nbsp; [Demo](https://nuxt3-awesome-starter.vercel.app/)
-- 🕹&nbsp; [Play online (with Nuxt Layer)](https://githubblitz.com/viandwi24/nuxt3-awesome-starter/tree/v2/.demo)
-- 👀&nbsp; [Play online (app)](https://githubblitz.com/viandwi24/nuxt3-awesome-starter)  
-  
+- 📖 **Từ Điển Tiếng Séc Đa Ngữ (2,376+ Từ Thật Dịch Tiếng Việt & Tiếng Anh 🇬🇧)**: Tra cứu từ điển tiếng Séc chuẩn từ vựng thực tế hỗ trợ song ngữ Tiếng Việt & Tiếng Anh (Danh từ, Động từ, Tính từ, Số đếm, Số thứ tự, Phân số) và tiếng Đức.
+- 🧠 **Thuật Toán Spaced Repetition (SRS SuperMemo-2)**: Hệ thống Flashcard tự động tính toán lịch ôn tập ngắt quãng cá nhân hóa giúp nhớ từ lâu.
+- 🎬 **Luyện Gõ Chính Tả YouTube (YouTube Dictation)**: Tự động bóc tách phụ đề tiếng Đức từ video YouTube, phát từng câu để người học chép chính tả và tự kiểm tra.
+- 📰 **Báo Tiếng Đức & Scraper Tin Tức**: Cào báo tiếng Đức (Tagesschau, DW), phân tích cấp độ từ vựng và hỗ trợ đọc báo với giọng đọc Text-to-Speech.
+- 🎯 **Interactive Quiz Suite**: Hệ thống bài tập 3 dạng: Trắc nghiệm (Multiple Choice), Sắp xếp câu (Sentence Builder) và Nghe gõ chính tả (Dictation) kèm hiệu ứng Confetti.
+- 📊 **Thống Kê Tiến Trình (Progress Analytics)**: Theo dõi số từ đã học, từ đã thành thạo, chuỗi Streak học liên tục và phân bổ theo trình độ.
+- 🌙 **Giao Diện Đỉnh Cao (Impeccable Design)**: Hỗ trợ Chế độ Sáng / Tối (Dark / Light Mode) với font Nunito và hiệu ứng micro-animations mượt mà.
 
-> **NOTES**
->
-> - This Project using "pnpm" or "bun" as package manager
-> - this is Nuxt 3 Awesome Starter V2, you can check V1 in this [link](https://github.com/viandwi24/nuxt3-awesome-starter/tree/v1)
+---
 
-## Preview
+## 🛠️ Hướng Dẫn Chạy Dự Án (Quick Start)
 
-<table align="center">
-  <tr>
-    <td align="center" width="100%" colspan="2">
-      <img src="assets/images/preview.png?raw=true" alt="Preview" title="Preview">
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="75%">
-      <img src="assets/images/preview_desktop.gif?raw=true" alt="Preview" title="Desktop Preview">
-    </td>
-    <td align="center" width="25%">
-      <img src="assets/images/preview_mobile.gif?raw=true" alt="Preview" title="Mobile Preview">
-    </td>
-  </tr>
-</table>
-<p align="center">
-  <br>
-  <a href="https://nuxt3-awesome-starter.vercel.app/" target="_blank">Live Demo</a>
-  <br><br>
-  <a href="https://codesandbox.io/s/github/viandwi24/nuxt3-awesome-starter" title="Open In Code Sandbox">
-    <img src="https://img.shields.io/badge/Open%20in-CodeSandbox-blue?style=flat-square&logo=codesandboxg" alt="Open In Code Sandbox">
-  </a>
-  <br>
-  <a href="https://stackblitz.com/github/viandwi24/nuxt3-awesome-starter" title="Open In Stackblitz">
-    <img src="https://developer.stackblitz.com/img/open_in_stackblitz.svg" alt="Open In Stackblitz">
-  </a>
-</p>
+### 1. Cài Đặt & Chạy Môi Trường Dev
 
-## Features
+```bash
+# 1. Cài đặt các gói phụ thuộc
+pnpm install
 
-- [X] 📚 [Nuxt Layer Support](https://nuxt.com/docs/getting-started/layers#layers)
-- [X] 💨 [Tailwind CSS v3](https://tailwindcss.com/)
-- [X] ✨ [Headless UI](https://headlessui.dev/)
-- [X] 🔔 [Nuxt Icon](https://icones.js.org/)
-- [X] 🛹 [State & Store Management (Pinia)](https://pinia.vuejs.org/)
-- [X] 📦 [Vue Composition Collection (Vueuse)](https://vueuse.org/)
-- [X] 🪝 Built-in Awesome Component & Layout
-- [X] 🌙 [Theme Manager (Color Mode)](https://color-mode.nuxtjs.org/)
-- [X] Configurable Theme (Easy to change)
-  - [X] Primary Colors
-  - [X] Font
+# 2. Sinh Prisma Client & Đồng bộ Database PostgreSQL
+npx prisma generate
+npx prisma db push
 
-## To Dos
+# 3. Nạp dữ liệu bản dịch Tiếng Anh
+node prisma/update_czech_english_translations.mjs
 
-- [X] Nuxt Layer Support
-- [X] Nuxt Awesome Modules Core
-  - [X] create modules `~/modules/awesome.ts`
-- [X] Adding Pinia
-  - [X] auto import "defineStore" as "definePiniaStore"
-  - [X] auto import folder "stores"
-- [X] Eslint & Prettier
-- [X] 🌙 Theme Switcher (light, dark, system)
-- [ ] 🇮🇩 Language Switcher
-- [ ] Awesome Components
-  - [X] Card
-  - [X] Content (@nuxt/content bridge)
-  - [X] Form
-    - [X] Text Input
-    - [X] Switch
-  - [X] Action
-    - [X] Button
-    - [X] Link
-  - [X] Tabs
-  - [X] Pages
-    - [X] Welcome
-    - [X] Error
-  - [X] Action Sheet
-  - [X] Alert Banner
-  - [ ] Modal
-  - [ ] Toast
+# 4. Chạy dự án ở môi trường Dev (Port 5134)
+pnpm dev
+```
 
-## Getting Started
+---
 
-### Installation
+## 📑 Tài Liệu Hệ Thống
 
-to use Nuxt Awesome Starter you can choose one of the following options:
-
-- using nuxt layer
-- using direct clone
-
-#### Using with Nuxt Layer (Simple Way)
-
-nuxt 3 have a new feature called "Nuxt Layer", with this feature you can create a new project with a template that has been provided by the community. you can see on [`.demo`](https://github.com/viandwi24/nuxt3-awesome-starter/tree/v2/.demo) to see how to use this template with nuxt layer.  
-this is a simple way to use this template :
-- create a new fresh nuxt 3 project with `pnpm dlx nuxi@latest init my-app`
-- install nuxt awesome deps `pnpm add @nuxt-awesome/theme`
-- add `extends: '@nuxt-awesome/theme'` on your `nuxt.config.ts` file
-  ```ts
-  # nuxt.config.ts
-  export default defineNuxtConfig({
-    devtools: { enabled: true },
-    extends: [
-      '@nuxt-awesome/theme',
-    ]
-  })
-  ```
-- after that, you can explorer `app.config.ts` to see what you can change on this template.
-- remove your `app.vue` in root project if you want to use our nuxt awesome as root layout.
-
-#### Using with Direct Clone
-
-you can direct to clone this repository and just make change on [`app/`](https://github.com/viandwi24/nuxt3-awesome-starter/tree/v2/app) folder as your main project folder.
-
-- clone this repository
-  ```bash
-  git clone https://github.com/viandwi24/nuxt3-awesome-starter
-  ```
-- install dependencies
-  ```bash
-  pnpm install
-  ```
-- run development server
-  ```bash
-  pnpm dev
-  ```
+Chi tiết kiến trúc hệ thống và hướng dẫn phát triển được ghi nhận tại:
+👉 [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)

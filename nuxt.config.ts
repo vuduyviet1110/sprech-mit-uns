@@ -18,8 +18,8 @@ export default defineNuxtConfig({
     layoutTransition: { name: 'layout', mode: 'out-in' },
   },
 
+  compatibilityDate: '2026-09-08',
   modules: [
-    '@nuxtjs/eslint-module',
     '@nuxtjs/tailwindcss',
     'nuxt-headlessui',
     'nuxt-icon',
@@ -31,7 +31,7 @@ export default defineNuxtConfig({
   ],
   shadcn: {
     prefix: '',
-    componentDir: './components/ui',
+    componentDir: './app/components/ui',
   },
   css: [
     resolve('./assets/scss/_variables.scss'),

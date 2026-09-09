@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { topicsData } from '~/mock-data'
+import { ref } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
@@ -8,14 +8,21 @@ import { Progress } from '~/components/ui/progress'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: 'Progress' })
-defineProps({})
 
 const selectedLevel = ref('A1')
 const selectedTopic = ref()
 
+const { data: topicsData, pending } = useFetch<Record<string, any[]>>('/api/topics?userId=user-demo-id', {
+  server: false,
+  default: () => ({ A1: [], A2: [], B1: [], B2: [] })
+})
+
 function handleTopicSelect(topic: any) {
-  console.log(topic)
-  selectedTopic.value = topic
+  if (topic.slug) {
+    navigateTo(`/lesson?topic=${topic.slug}`)
+  } else {
+    selectedTopic.value = topic
+  }
 }
 
 function handleBackToTopics() {
@@ -44,28 +51,28 @@ function calculateOverallProgress(topics: any[]) {
 
       <div
         v-else
-        class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen"
+        class="bg-slate-50 dark:bg-slate-950 min-h-screen transition-colors"
       >
         <!-- Header -->
         <header
-          class="bg-white/80 backdrop-blur-md border-b border-blue-100 sticky top-0 z-10"
+          class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10"
         >
           <div class="container mx-auto px-4 py-4">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2">
-                <Icon name="mdi:trending-up" class="h-8 w-8 text-blue-600" />
-                <h1 class="text-2xl font-bold text-blue-900">Your Progress</h1>
+                <Icon name="mdi:trending-up" class="h-8 w-8 text-primary-500" />
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Your Progress</h1>
               </div>
               <nav class="hidden md:flex items-center space-x-4">
                 <Button
                   variant="ghost"
-                  class="text-blue-700 hover:text-blue-900 transition-colors duration-200"
+                  class="text-slate-600 dark:text-slate-300 hover:text-primary-500 dark:hover:text-white transition-colors duration-200"
                 >
                   Dashboard
                 </Button>
                 <Button
                   variant="ghost"
-                  class="text-blue-700 hover:text-blue-900 transition-colors duration-200"
+                  class="text-slate-600 dark:text-slate-300 hover:text-primary-500 dark:hover:text-white transition-colors duration-200"
                 >
                   Statistics
                 </Button>
@@ -81,14 +88,14 @@ function calculateOverallProgress(topics: any[]) {
           <!-- Level Selection and Topics -->
           <div class="mt-8">
             <Tabs v-model="selectedLevel" class="w-full">
-              <TabsList class="grid w-full max-w-md mx-auto grid-cols-3 mb-8">
+              <TabsList class="grid w-full max-w-xl mx-auto grid-cols-3 sm:grid-cols-6 mb-8 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 p-1.5 rounded-xl shadow-xs">
                 <TabsTrigger
                   v-for="(topics, level) in topicsData"
                   :key="level"
-                  class="data-[state=active]:bg-green-600 data-[state=active]:text-white transition-all duration-300 ease-out"
+                  class="text-slate-800 dark:text-slate-200 font-bold data-[state=active]:bg-primary-500 data-[state=active]:text-white dark:data-[state=active]:bg-primary-500 hover:text-primary-600 dark:hover:text-white transition-all duration-200 rounded-lg py-2"
                   :value="level"
                 >
-                  <span class="relative z-10">{{ level }}</span>
+                  <span class="relative z-10 text-base">{{ level }}</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -102,18 +109,18 @@ function calculateOverallProgress(topics: any[]) {
                   >
                     <div class="mb-6">
                       <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xl font-semibold text-blue-900">
+                        <h3 class="text-xl font-semibold text-slate-900 dark:text-white">
                           Level {{ level }} Topics
                         </h3>
                         <div class="flex items-center gap-2">
-                          <span class="text-sm text-gray-600">Progress:</span>
+                          <span class="text-sm text-slate-500 dark:text-slate-400">Progress:</span>
                           <div class="w-32">
                             <Progress
                               :model-value="calculateOverallProgress(topics)"
-                              class="h-2 bg-slate-200"
+                              class="h-2 bg-slate-200 dark:bg-slate-800"
                             />
                           </div>
-                          <span class="text-sm font-medium text-blue-600">
+                          <span class="text-sm font-medium text-primary-500 dark:text-primary-400">
                             {{ calculateOverallProgress(topics) }}%
                           </span>
                         </div>
@@ -129,30 +136,30 @@ function calculateOverallProgress(topics: any[]) {
                         <Card
                           v-for="topic in topics"
                           :key="topic.id"
-                          class="cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white/80 backdrop-blur-sm"
+                          class="cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
                           @click="handleTopicSelect(topic)"
                         >
                           <CardHeader class="pb-4">
                             <div class="flex items-center justify-between mb-2">
                               <Badge
-                                class="bg-blue-100 text-blue-700 transition-colors duration-200"
+                                class="bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800 transition-colors duration-200"
                               >
                                 {{ topic.difficulty }}
                               </Badge>
                               <div class="flex items-center gap-2">
                                 <Icon
                                   name="mdi:clock-outline"
-                                  class="h-4 w-4 text-gray-500"
+                                  class="h-4 w-4 text-slate-400"
                                 />
-                                <span class="text-sm text-gray-500">
+                                <span class="text-sm text-slate-500 dark:text-slate-400">
                                   {{ topic.estimatedTime }}
                                 </span>
                               </div>
                             </div>
-                            <CardTitle class="text-lg text-blue-900 mb-2">
+                            <CardTitle class="text-lg text-slate-900 dark:text-white mb-2">
                               {{ topic.title }}
                             </CardTitle>
-                            <p class="text-gray-600 text-sm">
+                            <p class="text-slate-600 dark:text-slate-400 text-sm">
                               {{ topic.description }}
                             </p>
                           </CardHeader>
@@ -160,10 +167,10 @@ function calculateOverallProgress(topics: any[]) {
                             <div class="space-y-4">
                               <div class="space-y-2">
                                 <div class="flex justify-between text-sm">
-                                  <span class="text-gray-600"
+                                  <span class="text-slate-600 dark:text-slate-400"
                                     >Learning Progress</span
                                   >
-                                  <span class="text-blue-600">
+                                  <span class="text-primary-500 font-semibold">
                                     {{ topic.completedWords }}/{{
                                       topic.wordsCount
                                     }}
@@ -175,17 +182,17 @@ function calculateOverallProgress(topics: any[]) {
                                     (topic.completedWords / topic.wordsCount) *
                                     100
                                   "
-                                  class="h-2 bg-slate-200"
+                                  class="h-2 bg-slate-200 dark:bg-slate-800"
                                 />
                               </div>
 
                               <!-- Mastery Level -->
                               <div class="space-y-2">
                                 <div class="flex justify-between text-sm">
-                                  <span class="text-gray-600"
+                                  <span class="text-slate-600 dark:text-slate-400"
                                     >Mastery Level</span
                                   >
-                                  <span class="text-green-600">
+                                  <span class="text-emerald-500 font-semibold">
                                     {{ topic.masteredWords }}/{{
                                       topic.wordsCount
                                     }}
@@ -197,7 +204,7 @@ function calculateOverallProgress(topics: any[]) {
                                     (topic.masteredWords / topic.wordsCount) *
                                     100
                                   "
-                                  class="h-2 bg-slate-200"
+                                  class="h-2 bg-slate-200 dark:bg-slate-800"
                                 />
                               </div>
 
@@ -205,7 +212,7 @@ function calculateOverallProgress(topics: any[]) {
                                 class="flex items-center justify-between pt-2"
                               >
                                 <div
-                                  class="flex items-center gap-4 text-sm text-gray-500"
+                                  class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400"
                                 >
                                   <div class="flex items-center gap-1">
                                     <Icon
@@ -224,7 +231,7 @@ function calculateOverallProgress(topics: any[]) {
                                 </div>
                                 <Button
                                   size="sm"
-                                  class="bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
+                                  class="bg-primary-500 hover:bg-primary-600 text-white font-bold transition-colors duration-200"
                                 >
                                   <Icon name="mdi:brain" class="h-4 w-4 mr-2" />
                                   Continue Learning

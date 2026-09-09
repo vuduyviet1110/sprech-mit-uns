@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '~/server/ultis/prisma'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
@@ -33,6 +31,7 @@ export default defineEventHandler(async (event) => {
       meaning,
       example,
       level,
+      language = 'de',
       audioUrl,
       imageUrl,
       transcription,
@@ -47,7 +46,7 @@ export default defineEventHandler(async (event) => {
         topicNames.map(async (name: string) => {
           const existing = await prisma.topic.findFirst({ where: { name } })
           if (existing) return existing
-          return await prisma.topic.create({ data: { name } })
+          return await prisma.topic.create({ data: { name, language } })
         }),
       )
 
@@ -60,6 +59,7 @@ export default defineEventHandler(async (event) => {
           meaning,
           example,
           level,
+          language,
           audioUrl,
           imageUrl,
           transcription,

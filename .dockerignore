@@ -1,0 +1,14 @@
+.git
+.gitignore
+.nuxt
+.output
+node_modules
+dist
+*.log
+.env
+.env.*
+!.env.example
+README.md
+Dockerfile*
+docker-compose*
+prisma/migrations

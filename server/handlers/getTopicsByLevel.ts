@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '~/server/ultis/prisma'
 import { createError } from 'h3'
-
-const prisma = new PrismaClient()
 
 export async function getTopicsByLevel(userId: string) {
   const topics = await prisma.topic.findMany({
@@ -134,6 +132,7 @@ export async function getTopicDetails(slug: string, userId: string) {
     id: topic.id,
     slug: topic.slug, // Thêm slug
     title: topic.name,
+    language: (topic as any).language || 'de',
     description: topic.description,
     paragraph: topic.paragraph,
     englishTranslation: topic.englishTranslation,
