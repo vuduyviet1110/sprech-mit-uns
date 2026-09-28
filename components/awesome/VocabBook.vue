@@ -1,8 +1,8 @@
 <template>
-  <section ref="section" class="vocab-book w-full space-y-4" aria-label="Sổ từ vựng dạng sách">
+  <section ref="section" class="vocab-book w-full space-y-4 flex flex-col items-center" aria-label="Sổ từ vựng dạng sách">
     <div
       ref="host"
-      class="relative mx-auto w-full max-w-[1040px] select-none"
+      class="relative select-none w-full flex justify-center"
       @click="onHostClick"
     />
 
@@ -13,30 +13,30 @@
     -->
     <div :key="signature" ref="source" class="hidden" aria-hidden="true">
       <div data-density="hard" class="vb-page vb-cover bg-primary-600">
-        <div class="h-full flex flex-col justify-between p-8 sm:p-10 text-left text-white">
-          <div class="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider text-primary-100">
+        <div class="h-full flex flex-col justify-between p-8 sm:p-10 md:p-12 text-left text-white">
+          <div class="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider text-white/80">
             <Icon :name="isDictionary ? 'lucide:book-open' : 'lucide:book-marked'" class="w-5 h-5" />
             {{ isDictionary ? 'Kho từ điển chung' : 'Notebook cá nhân' }}
           </div>
           <div class="space-y-3">
-            <h2 class="text-4xl sm:text-5xl font-black tracking-tight leading-none">
+            <h2 class="text-5xl md:text-6xl font-black tracking-tight leading-tight text-white">
               {{ isDictionary ? 'Từ điển' : 'Sổ Từ Vựng' }}
             </h2>
-            <p class="text-lg font-bold text-primary-100">
+            <p class="text-lg md:text-xl font-bold text-white/90">
               {{ languageLabel }}
             </p>
           </div>
           <div class="space-y-1">
-            <p class="text-base font-extrabold">
+            <p class="text-sm md:text-base font-extrabold text-white">
               <template v-if="isDictionary">
                 {{ entries.length }} từ đang mở
-                <span v-if="totalCount" class="font-semibold text-primary-100"> / {{ totalCount }} trong kho</span>
+                <span v-if="totalCount" class="font-semibold text-white/80"> / {{ totalCount }} trong kho</span>
               </template>
               <template v-else>
                 {{ entries.length }} từ trong sổ
               </template>
             </p>
-            <p class="text-sm font-semibold text-primary-100">
+            <p class="text-xs md:text-sm font-semibold text-white/75">
               {{ WORDS_PER_PAGE }} từ mỗi trang · kéo góc hoặc phím ← → để lật
             </p>
           </div>
@@ -558,9 +558,12 @@ onBeforeUnmount(() => {
 
 .vb-cover {
   background-image:
-    linear-gradient(135deg, rgb(255 255 255 / 0.12), transparent 45%),
-    linear-gradient(to right, rgb(0 0 0 / 0.18), transparent 6%);
+    linear-gradient(135deg, rgb(255 255 255 / 0.15), transparent 40%),
+    linear-gradient(to right, rgb(0 0 0 / 0.2), transparent 8%);
   border-radius: 0.75rem;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.25),
+    inset -1px -1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* PageFlip starts a drag when mousedown lands on anything that is not an <a>/<button>. */
