@@ -1,10 +1,32 @@
 <template>
-  <section ref="section" class="vocab-book w-full space-y-4 flex flex-col items-center" aria-label="Sổ từ vựng dạng sách">
-    <div
-      ref="host"
-      class="relative select-none w-full flex justify-center"
-      @click="onHostClick"
-    />
+  <section ref="section" class="vocab-book w-full space-y-4" aria-label="Sổ từ vựng dạng sách">
+    <!-- Container with optional sidebar -->
+    <div :class="['flex gap-4 items-start', pageIndex === 0 ? '' : 'justify-center']">
+      <!-- Bookshelf sidebar (visible only on cover page) -->
+      <div v-if="pageIndex === 0 && entries.length > 0" class="hidden lg:flex flex-col gap-2 w-48 max-h-[600px] overflow-y-auto shrink-0">
+        <div class="text-xs font-bold text-slate-500 uppercase px-2 py-1">{{ entries.length }} cuốn sách</div>
+        <button
+          v-for="(entry, idx) in entries.slice(0, 12)"
+          :key="entry.id"
+          type="button"
+          class="text-left p-2.5 rounded-lg text-xs font-semibold transition-all"
+          :class="idx === 0 ? 'bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'"
+        >
+          <div class="truncate">{{ entry.word }}</div>
+          <div v-if="entry.topicName" class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+            {{ entry.topicName }}
+          </div>
+        </button>
+      </div>
+
+      <!-- Book viewer -->
+      <div
+        ref="host"
+        class="relative select-none"
+        :class="pageIndex === 0 ? 'flex-1 flex justify-center' : 'w-full flex justify-center'"
+        @click="onHostClick"
+      />
+    </div>
 
     <!--
       PageFlip moves these nodes into its own root and clones them while flipping,
