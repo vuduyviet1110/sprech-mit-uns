@@ -385,12 +385,12 @@ const clearFilters = () => {
           <div class="flex flex-col lg:flex-row gap-4 items-center">
             <!-- Large Search Input -->
             <div class="relative flex-1 w-full">
-              <Icon name="lucide:search" class="w-6 h-6 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Icon name="lucide:search" class="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-[1]" />
               <input
                 v-model="search"
                 type="text"
                 placeholder="Tra cứu từ vựng theo tên từ, ý nghĩa tiếng Việt / Anh hoặc câu ví dụ..."
-                class="w-full pl-13 pr-12 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl font-bold text-slate-900 dark:text-white placeholder-slate-400 text-base md:text-lg focus:outline-none focus:border-primary-500 transition-all"
+                class="w-full pl-14 pr-12 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl font-bold text-slate-900 dark:text-white placeholder-slate-400 text-base md:text-lg focus:outline-none focus:border-primary-500 transition-all"
               />
               <button
                 v-if="search"

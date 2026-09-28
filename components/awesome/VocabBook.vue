@@ -1,125 +1,220 @@
 <template>
   <section ref="section" class="vocab-book w-full space-y-4" aria-label="Sổ từ vựng dạng sách">
-    <!-- Container with optional bookshelf -->
-    <div :class="['flex gap-8 items-start transition-all duration-500', pageIndex === 0 ? '' : 'justify-center', selectedBookId && pageIndex === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100']">
-      <!-- Visual Bookshelf (visible only on cover page) -->
-      <div v-if="pageIndex === 0 && entries.length > 0" class="hidden lg:flex flex-col gap-4 w-64 shrink-0 animate-in fade-in">
-        <!-- Bookshelf header -->
-        <div class="space-y-2">
-          <h3 class="text-sm font-bold text-slate-900 dark:text-white">📚 Giá Sách</h3>
-          <p class="text-xs text-slate-600 dark:text-slate-400">{{ entries.length }} cuốn</p>
-        </div>
+    <!-- ============ SHELF VIEW ============ -->
+    <div v-if="!opened" class="w-full">
+      <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.7fr)] gap-5 xl:gap-6 items-stretch min-h-[min(70vh,42rem)]">
+        <!-- Shelf stage -->
+        <div class="vb-shelf relative flex flex-col rounded-2xl overflow-hidden shadow-lg min-h-[28rem]">
+          <div class="flex items-start justify-between gap-4 px-5 sm:px-8 pt-6 sm:pt-8">
+            <div class="text-left min-w-0">
+              <h3 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                Giá sách
+              </h3>
+              <p class="mt-1 text-sm sm:text-base font-semibold text-slate-600 dark:text-slate-300">
+                {{ shelf.length }} cuốn · {{ languageLabel }} · chọn gáy để mở
+              </p>
+            </div>
+            <div class="shrink-0 rounded-xl bg-white/70 dark:bg-slate-950/50 border border-amber-900/10 dark:border-slate-700 px-3 py-2 text-right">
+              <p class="text-sm font-bold text-slate-500 dark:text-slate-400">Trong kho</p>
+              <p class="text-xl font-black text-primary-700 dark:text-primary-300 tabular-nums">
+                {{ totalCount || entries.length }}
+              </p>
+            </div>
+          </div>
 
-        <!-- Bookshelf 3D effect container -->
-        <div class="relative bg-gradient-to-b from-slate-200 via-slate-100 to-slate-300 dark:from-slate-700 dark:via-slate-800 dark:to-slate-900 rounded-lg p-6 shadow-xl overflow-hidden">
-          <!-- Shelf background -->
-          <div class="absolute inset-0 bg-gradient-to-r from-amber-900/10 to-transparent pointer-events-none" />
+          <div class="relative flex-1 flex items-end justify-center gap-3 sm:gap-5 px-5 sm:px-10 pt-10 pb-2">
+            <!-- Soft backdrop books (visual weight only) -->
+            <div class="pointer-events-none absolute inset-x-8 bottom-6 top-16 opacity-[0.14] dark:opacity-20" aria-hidden="true">
+              <div class="absolute left-[8%] bottom-0 h-[70%] w-10 rounded-sm bg-slate-700/80 -rotate-6" />
+              <div class="absolute left-[18%] bottom-0 h-[85%] w-12 rounded-sm bg-primary-800/70 rotate-3" />
+              <div class="absolute right-[16%] bottom-0 h-[78%] w-11 rounded-sm bg-amber-900/60 -rotate-2" />
+              <div class="absolute right-[6%] bottom-0 h-[62%] w-9 rounded-sm bg-blue-900/50 rotate-5" />
+            </div>
 
-          <!-- Books grid -->
-          <div class="relative flex flex-wrap gap-2 justify-center min-h-[280px] items-center">
             <button
-              v-for="(book, idx) in books"
-              :key="book.id"
+              v-for="(item, idx) in shelf"
+              :key="item.id"
+              :data-spine="item.id"
               type="button"
-              class="group relative h-56 transition-all duration-300 transform hover:scale-105 cursor-pointer active:scale-95"
-              :style="{ width: idx === 0 ? '56px' : '48px' }"
-              :class="idx === 0 ? 'scale-105 shadow-2xl' : 'opacity-70 hover:opacity-100'"
-              :title="book.name"
-              @click="selectBook(book.id)"
+              class="vb-featured group relative z-[1] flex h-[min(52vh,22rem)] w-[min(42vw,15rem)] sm:w-[16rem] shrink-0 text-left cursor-pointer active:scale-[0.98] transition-transform duration-200"
+              :title="item.name"
+              @click="openBook(item.id)"
             >
-              <!-- Book spine 3D effect -->
-              <div
-                class="h-full w-full rounded-sm overflow-hidden shadow-lg transition-all relative"
-                :class="[
-                  idx === 0
-                    ? 'bg-gradient-to-r from-primary-600 via-primary-500 to-primary-400 shadow-2xl'
-                    : 'bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400',
-                  'flex items-center justify-center'
-                ]"
+              <span
+                class="vb-spine relative h-full w-11 sm:w-12 shrink-0 rounded-l-[3px] rounded-r-sm bg-gradient-to-r shadow-xl"
+                :class="SPINE_TONES[idx % SPINE_TONES.length]"
               >
-                <!-- 3D perspective for depth -->
-                <div class="absolute inset-0 bg-gradient-to-l from-black/20 to-transparent" />
+                <span class="absolute inset-y-0 left-0 w-2 bg-black/25 rounded-l-[3px]" />
+                <span class="absolute inset-y-0 right-0 w-1 bg-white/20" />
+                <span class="vb-spine-text absolute inset-0 flex items-center justify-center px-1 text-white font-black text-sm tracking-tight">
+                  {{ item.name }}
+                </span>
+              </span>
+              <span class="relative flex-1 h-full rounded-r-xl bg-primary-600 text-white shadow-xl overflow-hidden border border-primary-700/40 group-hover:bg-primary-500 transition-colors duration-200">
+                <span class="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10" />
+                <span class="pointer-events-none absolute inset-y-0 left-0 w-3 bg-gradient-to-r from-black/25 to-transparent" />
+                <span class="relative flex h-full flex-col justify-between p-4 sm:p-5">
+                  <span class="inline-flex items-center gap-1.5 text-sm font-extrabold uppercase tracking-wider text-primary-100">
+                    <Icon :name="isDictionary ? 'lucide:book-open' : 'lucide:book-marked'" class="w-4 h-4" />
+                    {{ isDictionary ? 'Kho chung' : 'Notebook' }}
+                  </span>
+                  <span>
+                    <span class="block text-2xl sm:text-3xl font-black leading-tight">{{ item.name }}</span>
+                    <span class="mt-1 block text-base font-bold text-primary-100">{{ languageLabel }}</span>
+                  </span>
+                  <span class="flex items-end justify-between gap-2">
+                    <span class="text-sm font-semibold text-primary-50/90">
+                      {{ item.count != null ? `${item.count} từ` : 'Mở để đọc' }}
+                    </span>
+                    <span class="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2.5 py-1.5 text-sm font-extrabold">
+                      Mở
+                      <Icon name="lucide:chevron-right" class="w-4 h-4" />
+                    </span>
+                  </span>
+                </span>
+              </span>
+            </button>
 
-                <!-- Book text (vertical) -->
-                <div class="absolute inset-0 flex items-center justify-center p-2">
-                  <div class="text-white font-black text-xs text-center leading-tight break-words rotate-0 line-clamp-3">
-                    {{ book.name.substring(0, 12) }}
-                  </div>
-                </div>
-
-                <!-- Highlight for selected book -->
-                <div v-if="idx === 0" class="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-white/20" />
-              </div>
+            <button
+              type="button"
+              class="relative z-[1] h-[min(40vh,16rem)] w-16 sm:w-20 shrink-0 rounded-xl border-2 border-dashed border-amber-900/30 dark:border-slate-500/50 text-amber-950/55 dark:text-slate-400 flex flex-col items-center justify-center gap-2 hover:border-primary-500 hover:text-primary-600 hover:bg-white/40 dark:hover:bg-slate-900/40 active:scale-95 transition-all duration-200 cursor-pointer"
+              aria-label="Thêm cuốn sách"
+              @click="emit('addBook')"
+            >
+              <Icon name="lucide:plus" class="w-6 h-6" />
+              <span class="text-sm font-bold">Thêm</span>
             </button>
           </div>
 
-          <!-- Shelf support (decorative) -->
-          <div class="absolute bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-amber-900/40 via-amber-800/40 to-transparent rounded-full" />
+          <div class="vb-plank" />
         </div>
 
-        <p class="text-xs text-slate-600 dark:text-slate-400 italic">Click vào một cuốn để xem chi tiết</p>
-      </div>
+        <!-- Guide / fill the empty half -->
+        <aside class="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 flex flex-col gap-5 text-left shadow-xs">
+          <div>
+            <h4 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              Đọc như cầm sách thật
+            </h4>
+            <p class="mt-1.5 text-sm sm:text-base font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
+              Chọn gáy trên giá, mở bìa, rồi lật trang. Mỗi trang khoảng {{ WORDS_PER_PAGE }} từ; gần cuối sách sẽ tự tải thêm.
+            </p>
+          </div>
 
-      <!-- Book viewer + Topics sidebar -->
-      <div class="flex gap-4 flex-1 items-start">
-        <!-- Book viewer -->
-        <div
-          ref="host"
-          class="relative select-none flex justify-center"
-          :class="pageIndex === 0 ? 'flex-1' : 'w-full'"
-          @click="onHostClick"
-        />
+          <ol class="space-y-3">
+            <li
+              v-for="(step, i) in shelfSteps"
+              :key="step.title"
+              class="flex gap-3"
+            >
+              <span class="shrink-0 w-9 h-9 rounded-xl bg-primary-500/10 text-primary-700 dark:text-primary-300 flex items-center justify-center text-sm font-black tabular-nums">
+                {{ i + 1 }}
+              </span>
+              <span class="min-w-0">
+                <span class="block text-base font-extrabold text-slate-800 dark:text-slate-100">{{ step.title }}</span>
+                <span class="block text-sm font-semibold text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{{ step.body }}</span>
+              </span>
+            </li>
+          </ol>
 
-        <!-- Topics sidebar (visible when book selected on cover) -->
-        <div
-          v-if="pageIndex === 0 && showTopics && bookTopics.length > 0"
-          class="hidden lg:flex flex-col gap-3 w-56 h-screen sticky top-0 overflow-y-auto pt-4 animate-in fade-in slide-in-from-right"
-        >
-          <div class="px-3 space-y-1">
-            <h4 class="text-sm font-bold text-slate-900 dark:text-white">{{ currentBook.name }}</h4>
-            <p class="text-xs text-slate-600 dark:text-slate-400">{{ bookTopics.length }} chủ đề</p>
+          <div class="mt-auto grid grid-cols-2 gap-2.5">
+            <div class="rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800 px-3 py-3">
+              <p class="text-sm font-bold text-slate-500">Mỗi trang</p>
+              <p class="text-lg font-black text-slate-900 dark:text-white tabular-nums">{{ WORDS_PER_PAGE }} từ</p>
+            </div>
+            <div class="rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800 px-3 py-3">
+              <p class="text-sm font-bold text-slate-500">Desktop</p>
+              <p class="text-lg font-black text-slate-900 dark:text-white tabular-nums">≈ {{ WORDS_PER_PAGE * 2 }} từ</p>
+            </div>
           </div>
 
           <button
+            v-if="shelf[0]"
             type="button"
-            class="mx-2 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            @click="showTopics = false; selectedBookId = null"
+            class="w-full inline-flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-400 text-white px-4 py-3 rounded-xl text-base font-extrabold active:scale-95 transition-all duration-200 cursor-pointer"
+            @click="openBook(shelf[0].id)"
           >
-            ← Quay lại kệ sách
+            <Icon name="lucide:book-open" class="w-5 h-5" />
+            Mở {{ shelf[0].name }}
           </button>
+        </aside>
+      </div>
+    </div>
 
-          <div class="px-2 space-y-1.5">
+    <!-- ============ BOOK VIEW ============ -->
+    <div v-else class="flex flex-col lg:flex-row items-start justify-center gap-4 lg:gap-6">
+      <aside class="w-full lg:w-56 shrink-0 space-y-2 text-left">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-primary-400 active:scale-95 transition-all duration-200 cursor-pointer"
+          @click="closeBook"
+        >
+          <Icon name="lucide:arrow-left" class="w-4 h-4" />
+          Về giá sách
+        </button>
+
+        <div v-if="bookTopics.length" class="pt-1 space-y-1.5">
+          <p class="px-1 text-xs font-extrabold uppercase tracking-wider text-slate-400">
+            Chủ đề ({{ bookTopics.length }})
+          </p>
+          <div class="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1">
+            <button
+              type="button"
+              class="shrink-0 lg:w-full text-left px-3 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer"
+              :class="activeTopic === null
+                ? 'bg-primary-500 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+              @click="setTopic(null)"
+            >
+              Tất cả · {{ entries.length }}
+            </button>
             <button
               v-for="topic in bookTopics"
-              :key="topic"
+              :key="topic.name"
               type="button"
-              class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
-              :class="[
-                'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
-                'hover:bg-primary-100 dark:hover:bg-primary-950 hover:text-primary-700 dark:hover:text-primary-300'
-              ]"
-              :title="topic"
+              class="shrink-0 lg:w-full text-left px-3 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer"
+              :class="activeTopic === topic.name
+                ? 'bg-primary-500 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+              :title="topic.name"
+              @click="setTopic(topic.name)"
             >
-              <div class="truncate">{{ topic }}</div>
-              <div class="text-[10px] text-slate-500 dark:text-slate-400">
-                {{ entries.filter(e => e.topicName === topic).length }} từ
-              </div>
+              <span class="block truncate">{{ topic.name }}</span>
+              <span class="block text-[10px] font-semibold opacity-70 tabular-nums">{{ topic.count }} từ</span>
             </button>
           </div>
         </div>
-      </div>
+      </aside>
+
+      <div
+        ref="host"
+        class="relative select-none flex-1 min-h-[580px] w-full flex justify-center transition-opacity duration-300"
+        :class="[
+          bookVisible ? 'opacity-100' : 'opacity-0',
+          coverCentered ? 'vb-host--cover-center' : '',
+        ]"
+        @click="onHostClick"
+      />
     </div>
+
+    <!-- Flying ghost between shelf and viewer -->
+    <div
+      v-if="ghost"
+      ref="ghostEl"
+      class="fixed z-50 rounded-lg bg-primary-600 shadow-2xl pointer-events-none"
+      :style="ghostStyle"
+    />
 
     <!--
       PageFlip moves these nodes into its own root and clones them while flipping,
       so buttons use data-action + one delegated listener instead of Vue handlers.
-      The whole block is re-keyed whenever the page structure changes.
+      Re-key on content change AND after destroy — destroy() removes the moved
+      DOM, and Vue will not recreate it unless the key changes.
     -->
-    <div :key="signature" ref="source" class="hidden" aria-hidden="true">
+    <div :key="`${signature}|${bookEpoch}`" ref="source" class="hidden" aria-hidden="true">
       <div data-density="hard" class="vb-page vb-cover bg-primary-600">
-        <div class="h-full flex flex-col justify-between p-8 sm:p-10 md:p-12 text-left text-white">
-          <div class="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider text-white/80">
-            <Icon :name="isDictionary ? 'lucide:book-open' : 'lucide:book-marked'" class="w-5 h-5" />
+        <div class="h-full flex flex-col items-center justify-between p-8 sm:p-10 md:p-12 text-center text-white">
+          <div class="flex flex-col items-center gap-2 text-sm font-extrabold uppercase tracking-wider text-white/80">
+            <Icon :name="isDictionary ? 'lucide:book-open' : 'lucide:book-marked'" class="w-6 h-6" />
             {{ isDictionary ? 'Kho từ điển chung' : 'Notebook cá nhân' }}
           </div>
           <div class="space-y-3">
@@ -128,11 +223,15 @@
             </h2>
             <p class="text-lg md:text-xl font-bold text-white/90">
               {{ languageLabel }}
+              <span v-if="activeTopic" class="block text-base text-white/75 mt-1">{{ activeTopic }}</span>
             </p>
           </div>
-          <div class="space-y-1">
+          <div class="space-y-1.5 max-w-[18rem]">
             <p class="text-sm md:text-base font-extrabold text-white">
-              <template v-if="isDictionary">
+              <template v-if="activeTopic">
+                {{ visibleEntries.length }} từ trong chủ đề
+              </template>
+              <template v-else-if="isDictionary">
                 {{ entries.length }} từ đang mở
                 <span v-if="totalCount" class="font-semibold text-white/80"> / {{ totalCount }} trong kho</span>
               </template>
@@ -140,7 +239,7 @@
                 {{ entries.length }} từ trong sổ
               </template>
             </p>
-            <p class="text-xs md:text-sm font-semibold text-white/75">
+            <p class="text-sm font-semibold text-white/75 leading-snug">
               {{ WORDS_PER_PAGE }} từ mỗi trang · kéo góc hoặc phím ← → để lật
             </p>
           </div>
@@ -318,7 +417,7 @@
       </div>
     </div>
 
-    <nav class="flex flex-wrap items-center justify-center gap-2 sm:gap-3" aria-label="Điều khiển sách">
+    <nav v-if="opened" class="flex flex-wrap items-center justify-center gap-2 sm:gap-3" aria-label="Điều khiển sách">
       <button
         type="button"
         class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-primary-400 disabled:opacity-40 active:scale-95 transition-all duration-200 cursor-pointer"
@@ -351,7 +450,7 @@
       </button>
     </nav>
     <p
-      v-if="loading && hasMore"
+      v-if="opened && loading && hasMore"
       class="text-center text-sm font-bold text-slate-500"
     >
       Đang tải thêm trang…
@@ -400,6 +499,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
+  (e: 'addBook'): void
   (e: 'play', entry: VocabBookEntry): void
   (e: 'edit', entry: VocabBookEntry): void
   (e: 'delete', id: string): void
@@ -415,46 +515,85 @@ const section = ref<HTMLElement | null>(null)
 const host = ref<HTMLElement | null>(null)
 const source = ref<HTMLElement | null>(null)
 
+const ghostEl = ref<HTMLElement | null>(null)
+
 const pageIndex = ref(0)
 const pageCount = ref(0)
-const selectedBookId = ref<string | null>(null)
-const showTopics = ref(false)
+/** Landscape cover sits on the right half — nudge it to the visual center until the reader flips. */
+const coverCentered = ref(false)
+
+const opened = ref(false)
+const bookVisible = ref(false)
+const activeTopic = ref<string | null>(null)
+const ghost = ref<{ from: DOMRect } | null>(null)
+const ghostStyle = ref<Record<string, string>>({})
+/** Bumped after PageFlip.destroy() so Vue remounts the hidden page templates. */
+const bookEpoch = ref(0)
 
 let book: PageFlip | null = null
 let bookRoot: HTMLElement | null = null
 let PageFlipCtor: typeof PageFlip | null = null
 let unmounted = false
+/** When set, the next signature-driven rebuild starts at this page (topic filter). */
+let pendingStartPage: number | null = null
 
 const WORDS_PER_PAGE = 8
 
-// Create virtual "books" - currently just one from entries, but can be extended
-const books = computed(() => [
-  {
-    id: 'main',
-    name: isDictionary.value ? 'Từ Điển' : 'Sổ Từ Vựng',
-    language: props.language,
-    entriesCount: props.entries.length,
-  },
-])
-
-const currentBook = computed(() => books.value.find(b => b.id === selectedBookId.value) || books.value[0])
-
-// Extract unique topics from entries
-const bookTopics = computed(() => {
-  const topics = new Set<string>()
-  props.entries.forEach(e => {
-    if (e.topicName) topics.add(e.topicName)
-  })
-  return Array.from(topics).sort()
-})
+const SPINE_TONES = [
+  'from-primary-700 via-primary-600 to-primary-500',
+  'from-blue-800 via-blue-700 to-blue-600',
+  'from-amber-800 via-amber-700 to-amber-600',
+  'from-rose-800 via-rose-700 to-rose-600',
+]
 
 const isDictionary = computed(() => props.variant === 'dictionary')
 const languageLabel = computed(() => (props.language === 'cs' ? 'Tiếng Séc' : 'Tiếng Đức'))
 
+const shelfSteps = computed(() => [
+  {
+    title: 'Chọn gáy sách',
+    body: isDictionary.value
+      ? 'Mở cuốn Từ điển trên giá — hoặc thêm cuốn mới khi sẵn sàng.'
+      : 'Mở sổ cá nhân trên giá để xem từ đã lưu.',
+  },
+  {
+    title: 'Lật như sách giấy',
+    body: 'Kéo góc trang, vuốt, hoặc dùng phím ← → / nút Trước–Sau.',
+  },
+  {
+    title: isDictionary.value ? 'Lưu sổ hoặc thêm SRS' : 'Sửa / xóa ngay trong trang',
+    body: isDictionary.value
+      ? 'Nút xanh dương lưu sổ; nút emerald đưa vào lịch ôn.'
+      : 'Chỉnh nghĩa và ghi chú mà không rời trang sách.',
+  },
+])
+
+// One volume for now; the shelf renders whatever this list holds.
+const shelf = computed(() => [
+  {
+    id: 'main',
+    name: isDictionary.value ? 'Từ điển' : 'Sổ từ vựng',
+    count: props.totalCount || props.entries.length,
+  },
+])
+
+const bookTopics = computed(() => {
+  const counts = new Map<string, number>()
+  for (const e of props.entries) {
+    if (!e.topicName) continue
+    counts.set(e.topicName, (counts.get(e.topicName) || 0) + 1)
+  }
+  return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const visibleEntries = computed(() =>
+  activeTopic.value === null ? props.entries : props.entries.filter(e => e.topicName === activeTopic.value),
+)
+
 const wordPages = computed(() => {
   const pages: { start: number, words: VocabBookEntry[] }[] = []
-  for (let i = 0; i < props.entries.length; i += WORDS_PER_PAGE) {
-    pages.push({ start: i, words: props.entries.slice(i, i + WORDS_PER_PAGE) })
+  for (let i = 0; i < visibleEntries.value.length; i += WORDS_PER_PAGE) {
+    pages.push({ start: i, words: visibleEntries.value.slice(i, i + WORDS_PER_PAGE) })
   }
   return pages
 })
@@ -468,7 +607,7 @@ const chunkTopic = (words: VocabBookEntry[]) => {
 // Cover + word sheets; filler keeps a full spread. Back cover only when nothing left to fetch.
 const needsFiller = computed(() => wordPages.value.length % 2 === 1)
 
-const signature = computed(() => `${props.variant}|${props.entries.map(e => e.id).join(',')}|${props.hasMore ? 1 : 0}`)
+const signature = computed(() => `${props.variant}|${visibleEntries.value.map(e => e.id).join(',')}|${props.hasMore ? 1 : 0}`)
 
 const TYPE_LABELS: Record<string, string> = {
   Noun: 'Danh từ',
@@ -502,10 +641,33 @@ const syncState = () => {
   if (!book) return
   pageIndex.value = book.getCurrentPageIndex()
   pageCount.value = book.getPageCount()
+  updateCoverCentering('read')
   prefetchIfNeeded()
 }
 
+/** In landscape, PageFlip parks the cover on the right half of a 2-page stage. Shift that stage so the cover sits centered; restore when flipping into a spread. */
+const updateCoverCentering = (state: string = 'read') => {
+  if (!book || !host.value) {
+    coverCentered.value = false
+    return
+  }
+  const onFrontCover = book.getCurrentPageIndex() === 0
+  const landscape = book.getOrientation() === 'landscape'
+  const idle = state === 'read'
+  const should = onFrontCover && landscape && idle && bookVisible.value
+  coverCentered.value = should
+  if (!should) {
+    host.value.style.removeProperty('--vb-cover-nudge')
+    return
+  }
+  const coverEl = host.value.querySelector('.vb-cover') as HTMLElement | null
+  const w = coverEl?.offsetWidth || 420
+  host.value.style.setProperty('--vb-cover-nudge', `${-Math.round(w / 2)}px`)
+}
+
 const prefetchIfNeeded = () => {
+  // A topic filter shows a slice of what is already loaded — paging it would fetch forever.
+  if (activeTopic.value !== null) return
   if (!props.hasMore || props.loading || !wordPages.value.length) return
   // Cover is 0. In landscape the last two sheets are a spread — fetch when that spread is open.
   const lastWordPageIndex = wordPages.value.length
@@ -525,7 +687,7 @@ const teardown = () => {
 }
 
 const build = (startPage = 0) => {
-  if (unmounted || !PageFlipCtor || !host.value || !source.value) return
+  if (unmounted || !opened.value || !PageFlipCtor || !host.value || !source.value) return
   const pages = Array.from(source.value.children) as HTMLElement[]
   if (!pages.length) return
 
@@ -553,15 +715,102 @@ const build = (startPage = 0) => {
   book.on('flip', syncState)
   book.on('init', syncState)
   book.on('changeOrientation', syncState)
+  book.on('changeState', (e) => {
+    updateCoverCentering(String(e.data ?? 'read'))
+  })
   book.loadFromHTML(pages)
   syncState()
 }
 
-watch(signature, () => {
-  const keep = book?.getCurrentPageIndex() ?? 0
+/** Destroy PageFlip, remount Vue page templates, then init again. */
+const rebuildAt = async (startPage = 0) => {
   teardown()
-  nextTick(() => build(keep))
+  bookEpoch.value += 1
+  await nextTick()
+  build(startPage)
+}
+
+watch(signature, () => {
+  if (!opened.value) return
+  const keep = pendingStartPage ?? book?.getCurrentPageIndex() ?? 0
+  pendingStartPage = null
+  void rebuildAt(keep)
 })
+
+const FLY_MS = 520
+
+/** Fly a stand-in from the clicked spine to where the cover will land, then reveal the real book. */
+const openBook = async (id: string) => {
+  if (opened.value) return
+  const spine = section.value?.querySelector<HTMLElement>(`[data-spine="${id}"]`)
+  const from = spine?.getBoundingClientRect()
+  const reduced = prefersReducedMotion()
+
+  opened.value = true
+  bookVisible.value = reduced || !from
+  await nextTick()
+  // Source must have fresh DOM — closeBook / prior rebuilds bump bookEpoch for that.
+  if (!source.value?.children.length) {
+    bookEpoch.value += 1
+    await nextTick()
+  }
+  build(0)
+
+  if (reduced || !from || !host.value) {
+    bookVisible.value = true
+    updateCoverCentering('read')
+    return
+  }
+
+  const to = host.value.getBoundingClientRect()
+  // PageFlip renders a single portrait page ~420x580 centred in the host.
+  const h = Math.min(580, to.height || 580)
+  const w = h * (420 / 580)
+  ghost.value = { from }
+  ghostStyle.value = {
+    left: `${from.left}px`,
+    top: `${from.top}px`,
+    width: `${from.width}px`,
+    height: `${from.height}px`,
+    transformOrigin: 'top left',
+  }
+  await nextTick()
+  const el = ghostEl.value
+  if (!el) {
+    bookVisible.value = true
+    ghost.value = null
+    updateCoverCentering('read')
+    return
+  }
+  el.getBoundingClientRect()
+  el.style.transition = `transform ${FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${FLY_MS}ms ease`
+  el.style.transform = `translate(${to.left + (to.width - w) / 2 - from.left}px, ${to.top + (to.height - h) / 2 - from.top}px) scale(${w / from.width}, ${h / from.height})`
+
+  window.setTimeout(() => {
+    bookVisible.value = true
+    ghost.value = null
+    updateCoverCentering('read')
+  }, FLY_MS)
+}
+
+const closeBook = () => {
+  teardown()
+  bookEpoch.value += 1
+  opened.value = false
+  bookVisible.value = false
+  coverCentered.value = false
+  activeTopic.value = null
+  pageIndex.value = 0
+  pageCount.value = 0
+  pendingStartPage = null
+}
+
+const setTopic = (name: string | null) => {
+  if (activeTopic.value === name) return
+  // Prefer cover / first spread after filtering; signature watch runs rebuildAt.
+  pendingStartPage = Math.min(book?.getCurrentPageIndex() ?? 0, 1)
+  activeTopic.value = name
+}
 
 const findEntry = (id?: string) => props.entries.find(e => e.id === id)
 
@@ -627,12 +876,6 @@ const toCover = () => {
   syncState()
 }
 
-const selectBook = (bookId: string) => {
-  selectedBookId.value = bookId
-  showTopics.value = true
-  // Animation will handle the transition via CSS
-}
-
 const onKeydown = (ev: KeyboardEvent) => {
   if (!book || !section.value) return
   const target = ev.target as HTMLElement | null
@@ -652,8 +895,6 @@ const onKeydown = (ev: KeyboardEvent) => {
 onMounted(async () => {
   const mod = await import('page-flip/dist/js/page-flip.module.js')
   PageFlipCtor = mod.PageFlip
-  await nextTick()
-  build()
   window.addEventListener('keydown', onKeydown)
 })
 
@@ -665,32 +906,57 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-@keyframes slideInFromRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.vb-shelf {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 0%, rgb(59 166 118 / 0.12), transparent 55%),
+    linear-gradient(180deg, rgb(120 53 15 / 0.07), transparent 38%),
+    linear-gradient(180deg, #f8fafc, #e8eef5);
+  border: 1px solid rgb(120 53 15 / 0.12);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+:global(.dark) .vb-shelf {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 0%, rgb(59 166 118 / 0.14), transparent 55%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.35), transparent 40%),
+    linear-gradient(180deg, rgb(30 41 59), rgb(15 23 42));
+  border-color: rgb(51 65 85);
 }
 
-.animate-in {
-  animation: fadeIn 0.3s ease-out;
+/* The plank the spines stand on. */
+.vb-plank {
+  height: 18px;
+  margin: 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, #b45309, #7c2d12);
+  box-shadow: 0 -12px 22px -12px rgb(0 0 0 / 0.5);
 }
 
-.slide-in-from-right {
-  animation: slideInFromRight 0.3s ease-out;
+.vb-featured {
+  transform-origin: bottom center;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vb-featured:hover {
+  transform: translateY(-10px);
+}
+
+.vb-featured:active {
+  transform: translateY(-4px) scale(0.99);
+}
+
+.vb-spine-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vb-featured,
+  .vb-featured:hover,
+  .vb-featured:active {
+    transition: none;
+    transform: none;
+  }
 }
 
 .vb-page {
@@ -725,6 +991,22 @@ onBeforeUnmount(() => {
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.25),
     inset -1px -1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/*
+  Landscape + showCover parks page 0 on the right half of a 2-page stage.
+  Nudge the stage left by half a page so the cover sits visually centered.
+  Removed while flipping so the open-book geometry stays correct.
+*/
+.vb-host--cover-center :deep(.stf__parent) {
+  transform: translateX(var(--vb-cover-nudge, 0px));
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vb-host--cover-center :deep(.stf__parent) {
+    transition: none;
+  }
 }
 
 /* PageFlip starts a drag when mousedown lands on anything that is not an <a>/<button>. */
