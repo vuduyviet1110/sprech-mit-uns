@@ -1,9 +1,9 @@
 <template>
   <section ref="section" class="vocab-book w-full space-y-4" aria-label="Sổ từ vựng dạng sách">
     <!-- Container with optional bookshelf -->
-    <div :class="['flex gap-8 items-start', pageIndex === 0 ? '' : 'justify-center']">
+    <div :class="['flex gap-8 items-start transition-all duration-500', pageIndex === 0 ? '' : 'justify-center', selectedBookId && pageIndex === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100']">
       <!-- Visual Bookshelf (visible only on cover page) -->
-      <div v-if="pageIndex === 0 && entries.length > 0" class="hidden lg:flex flex-col gap-4 w-64 shrink-0">
+      <div v-if="pageIndex === 0 && entries.length > 0" class="hidden lg:flex flex-col gap-4 w-64 shrink-0 animate-in fade-in">
         <!-- Bookshelf header -->
         <div class="space-y-2">
           <h3 class="text-sm font-bold text-slate-900 dark:text-white">📚 Giá Sách</h3>
@@ -18,13 +18,14 @@
           <!-- Books grid -->
           <div class="relative flex flex-wrap gap-2 justify-center min-h-[280px] items-center">
             <button
-              v-for="(entry, idx) in entries.slice(0, 8)"
-              :key="entry.id"
+              v-for="(book, idx) in books"
+              :key="book.id"
               type="button"
-              class="group relative h-56 transition-all duration-300 transform hover:scale-105"
+              class="group relative h-56 transition-all duration-300 transform hover:scale-105 cursor-pointer active:scale-95"
               :style="{ width: idx === 0 ? '56px' : '48px' }"
               :class="idx === 0 ? 'scale-105 shadow-2xl' : 'opacity-70 hover:opacity-100'"
-              :title="entry.word"
+              :title="book.name"
+              @click="selectBook(book.id)"
             >
               <!-- Book spine 3D effect -->
               <div
@@ -42,7 +43,7 @@
                 <!-- Book text (vertical) -->
                 <div class="absolute inset-0 flex items-center justify-center p-2">
                   <div class="text-white font-black text-xs text-center leading-tight break-words rotate-0 line-clamp-3">
-                    {{ entry.word.substring(0, 8) }}
+                    {{ book.name.substring(0, 12) }}
                   </div>
                 </div>
 
@@ -59,13 +60,54 @@
         <p class="text-xs text-slate-600 dark:text-slate-400 italic">Click vào một cuốn để xem chi tiết</p>
       </div>
 
-      <!-- Book viewer -->
-      <div
-        ref="host"
-        class="relative select-none"
-        :class="pageIndex === 0 ? 'flex-1 flex justify-center' : 'w-full flex justify-center'"
-        @click="onHostClick"
-      />
+      <!-- Book viewer + Topics sidebar -->
+      <div class="flex gap-4 flex-1 items-start">
+        <!-- Book viewer -->
+        <div
+          ref="host"
+          class="relative select-none flex justify-center"
+          :class="pageIndex === 0 ? 'flex-1' : 'w-full'"
+          @click="onHostClick"
+        />
+
+        <!-- Topics sidebar (visible when book selected on cover) -->
+        <div
+          v-if="pageIndex === 0 && showTopics && bookTopics.length > 0"
+          class="hidden lg:flex flex-col gap-3 w-56 h-screen sticky top-0 overflow-y-auto pt-4 animate-in fade-in slide-in-from-right"
+        >
+          <div class="px-3 space-y-1">
+            <h4 class="text-sm font-bold text-slate-900 dark:text-white">{{ currentBook.name }}</h4>
+            <p class="text-xs text-slate-600 dark:text-slate-400">{{ bookTopics.length }} chủ đề</p>
+          </div>
+
+          <button
+            type="button"
+            class="mx-2 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            @click="showTopics = false; selectedBookId = null"
+          >
+            ← Quay lại kệ sách
+          </button>
+
+          <div class="px-2 space-y-1.5">
+            <button
+              v-for="topic in bookTopics"
+              :key="topic"
+              type="button"
+              class="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
+              :class="[
+                'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
+                'hover:bg-primary-100 dark:hover:bg-primary-950 hover:text-primary-700 dark:hover:text-primary-300'
+              ]"
+              :title="topic"
+            >
+              <div class="truncate">{{ topic }}</div>
+              <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                {{ entries.filter(e => e.topicName === topic).length }} từ
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!--
@@ -375,6 +417,8 @@ const source = ref<HTMLElement | null>(null)
 
 const pageIndex = ref(0)
 const pageCount = ref(0)
+const selectedBookId = ref<string | null>(null)
+const showTopics = ref(false)
 
 let book: PageFlip | null = null
 let bookRoot: HTMLElement | null = null
@@ -382,6 +426,27 @@ let PageFlipCtor: typeof PageFlip | null = null
 let unmounted = false
 
 const WORDS_PER_PAGE = 8
+
+// Create virtual "books" - currently just one from entries, but can be extended
+const books = computed(() => [
+  {
+    id: 'main',
+    name: isDictionary.value ? 'Từ Điển' : 'Sổ Từ Vựng',
+    language: props.language,
+    entriesCount: props.entries.length,
+  },
+])
+
+const currentBook = computed(() => books.value.find(b => b.id === selectedBookId.value) || books.value[0])
+
+// Extract unique topics from entries
+const bookTopics = computed(() => {
+  const topics = new Set<string>()
+  props.entries.forEach(e => {
+    if (e.topicName) topics.add(e.topicName)
+  })
+  return Array.from(topics).sort()
+})
 
 const isDictionary = computed(() => props.variant === 'dictionary')
 const languageLabel = computed(() => (props.language === 'cs' ? 'Tiếng Séc' : 'Tiếng Đức'))
@@ -562,6 +627,12 @@ const toCover = () => {
   syncState()
 }
 
+const selectBook = (bookId: string) => {
+  selectedBookId.value = bookId
+  showTopics.value = true
+  // Animation will handle the transition via CSS
+}
+
 const onKeydown = (ev: KeyboardEvent) => {
   if (!book || !section.value) return
   const target = ev.target as HTMLElement | null
@@ -594,6 +665,34 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.slide-in-from-right {
+  animation: slideInFromRight 0.3s ease-out;
+}
+
 .vb-page {
   overflow: hidden;
 }
