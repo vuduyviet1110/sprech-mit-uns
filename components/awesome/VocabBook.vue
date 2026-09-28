@@ -1,22 +1,62 @@
 <template>
   <section ref="section" class="vocab-book w-full space-y-4" aria-label="Sổ từ vựng dạng sách">
-    <!-- Container with optional sidebar -->
-    <div :class="['flex gap-4 items-start', pageIndex === 0 ? '' : 'justify-center']">
-      <!-- Bookshelf sidebar (visible only on cover page) -->
-      <div v-if="pageIndex === 0 && entries.length > 0" class="hidden lg:flex flex-col gap-2 w-48 max-h-[600px] overflow-y-auto shrink-0">
-        <div class="text-xs font-bold text-slate-500 uppercase px-2 py-1">{{ entries.length }} cuốn sách</div>
-        <button
-          v-for="(entry, idx) in entries.slice(0, 12)"
-          :key="entry.id"
-          type="button"
-          class="text-left p-2.5 rounded-lg text-xs font-semibold transition-all"
-          :class="idx === 0 ? 'bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'"
-        >
-          <div class="truncate">{{ entry.word }}</div>
-          <div v-if="entry.topicName" class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-            {{ entry.topicName }}
+    <!-- Container with optional bookshelf -->
+    <div :class="['flex gap-8 items-start', pageIndex === 0 ? '' : 'justify-center']">
+      <!-- Visual Bookshelf (visible only on cover page) -->
+      <div v-if="pageIndex === 0 && entries.length > 0" class="hidden lg:flex flex-col gap-4 w-64 shrink-0">
+        <!-- Bookshelf header -->
+        <div class="space-y-2">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">📚 Giá Sách</h3>
+          <p class="text-xs text-slate-600 dark:text-slate-400">{{ entries.length }} cuốn</p>
+        </div>
+
+        <!-- Bookshelf 3D effect container -->
+        <div class="relative bg-gradient-to-b from-slate-200 via-slate-100 to-slate-300 dark:from-slate-700 dark:via-slate-800 dark:to-slate-900 rounded-lg p-6 shadow-xl overflow-hidden">
+          <!-- Shelf background -->
+          <div class="absolute inset-0 bg-gradient-to-r from-amber-900/10 to-transparent pointer-events-none" />
+
+          <!-- Books grid -->
+          <div class="relative flex flex-wrap gap-2 justify-center min-h-[280px] items-center">
+            <button
+              v-for="(entry, idx) in entries.slice(0, 8)"
+              :key="entry.id"
+              type="button"
+              class="group relative h-56 transition-all duration-300 transform hover:scale-105"
+              :style="{ width: idx === 0 ? '56px' : '48px' }"
+              :class="idx === 0 ? 'scale-105 shadow-2xl' : 'opacity-70 hover:opacity-100'"
+              :title="entry.word"
+            >
+              <!-- Book spine 3D effect -->
+              <div
+                class="h-full w-full rounded-sm overflow-hidden shadow-lg transition-all relative"
+                :class="[
+                  idx === 0
+                    ? 'bg-gradient-to-r from-primary-600 via-primary-500 to-primary-400 shadow-2xl'
+                    : 'bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400',
+                  'flex items-center justify-center'
+                ]"
+              >
+                <!-- 3D perspective for depth -->
+                <div class="absolute inset-0 bg-gradient-to-l from-black/20 to-transparent" />
+
+                <!-- Book text (vertical) -->
+                <div class="absolute inset-0 flex items-center justify-center p-2">
+                  <div class="text-white font-black text-xs text-center leading-tight break-words rotate-0 line-clamp-3">
+                    {{ entry.word.substring(0, 8) }}
+                  </div>
+                </div>
+
+                <!-- Highlight for selected book -->
+                <div v-if="idx === 0" class="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-white/20" />
+              </div>
+            </button>
           </div>
-        </button>
+
+          <!-- Shelf support (decorative) -->
+          <div class="absolute bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-amber-900/40 via-amber-800/40 to-transparent rounded-full" />
+        </div>
+
+        <p class="text-xs text-slate-600 dark:text-slate-400 italic">Click vào một cuốn để xem chi tiết</p>
       </div>
 
       <!-- Book viewer -->
