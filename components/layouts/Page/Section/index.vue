@@ -1,9 +1,9 @@
 <script setup></script>
 
 <template>
-  <div class="pt-2 mb-6 w-full">
-    <section class="py-10 px-4">
-      <div class="flex flex-col mx-auto text-center gap-10">
+  <div class="w-full py-4">
+    <section class="w-full">
+      <div class="flex flex-col w-full gap-6">
         <slot />
       </div>
     </section>

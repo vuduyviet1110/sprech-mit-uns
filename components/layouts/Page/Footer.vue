@@ -1,75 +1,92 @@
 <script lang="ts" setup>
 const { awesome } = useAppConfig()
+const year = new Date().getFullYear()
 </script>
 
 <template>
   <footer
-    class="border-t border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 py-12 px-4 transition-colors duration-300"
+    class="border-t border-slate-200 bg-white px-4 py-12 text-slate-800 transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
   >
-    <div class="container mx-auto">
-      <!-- Footer Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-        <!-- Brand Column -->
+    <div class="smu-page w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+      <div class="grid grid-cols-1 gap-8 md:grid-cols-4">
         <div>
-          <div class="flex items-center space-x-2 mb-4">
+          <div class="mb-4 flex items-center space-x-2">
             <Icon
-              name="tabler:book"
-              class="h-6 w-6 text-blue-600 dark:text-blue-400"
+              name="lucide:book-open"
+              class="h-6 w-6 text-primary-600 dark:text-primary-400"
             />
-            <span class="text-xl font-bold text-gray-900 dark:text-white">{{
+            <span class="text-xl font-bold text-slate-900 dark:text-white">{{
               awesome?.name
             }}</span>
           </div>
-          <p class="text-gray-600 dark:text-gray-400">
-            {{ awesome?.description || 'Learn German with ease and fun!' }}
+          <p class="text-base text-slate-600 dark:text-slate-400">
+            {{ awesome?.description || 'Học tiếng Đức & tiếng Séc với lộ trình hàng ngày.' }}
           </p>
         </div>
 
-        <!-- Learning Section -->
         <div>
-          <h4 class="font-semibold mb-4 text-gray-800 dark:text-white">
-            Learning
+          <h4 class="mb-4 font-semibold text-slate-800 dark:text-white">
+            Học tập
           </h4>
-          <ul class="space-y-2 text-gray-600 dark:text-gray-400">
-            <li>Lessons</li>
-            <li>Vocabulary</li>
-            <li>Grammar</li>
-            <li>Pronunciation</li>
+          <ul class="space-y-2 text-base text-slate-600 dark:text-slate-400">
+            <li>
+              <NuxtLink to="/today" class="hover:text-primary-600 transition-colors">Hôm nay</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/dictionary" class="hover:text-primary-600 transition-colors">Từ điển</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/review" class="hover:text-primary-600 transition-colors">Ôn SRS</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/about" class="hover:text-primary-600 transition-colors">Giới thiệu</NuxtLink>
+            </li>
           </ul>
         </div>
 
-        <!-- Tools Section -->
         <div>
-          <h4 class="font-semibold mb-4 text-gray-800 dark:text-white">
-            Tools
+          <h4 class="mb-4 font-semibold text-slate-800 dark:text-white">
+            Công cụ
           </h4>
-          <ul class="space-y-2 text-gray-600 dark:text-gray-400">
-            <li>Flashcards</li>
-            <li>Dictionary</li>
-            <li>Progress Tracker</li>
-            <li>Quizzes</li>
+          <ul class="space-y-2 text-base text-slate-600 dark:text-slate-400">
+            <li>
+              <NuxtLink to="/lesson" class="hover:text-primary-600 transition-colors">Bài học</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/vocabulary" class="hover:text-primary-600 transition-colors">Sổ từ</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/progress" class="hover:text-primary-600 transition-colors">Tiến độ</NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/setting" class="hover:text-primary-600 transition-colors">Cài đặt</NuxtLink>
+            </li>
           </ul>
         </div>
 
-        <!-- Support Section -->
         <div>
-          <h4 class="font-semibold mb-4 text-gray-800 dark:text-white">
-            Support
+          <h4 class="mb-4 font-semibold text-slate-800 dark:text-white">
+            Pháp lý
           </h4>
-          <ul class="space-y-2 text-gray-600 dark:text-gray-400">
-            <li>Help Center</li>
-            <li>Community</li>
-            <li>Contact</li>
-            <li>Feedback</li>
+          <ul class="space-y-2 text-base text-slate-600 dark:text-slate-400">
+            <li>
+              <NuxtLink to="/privacy" class="hover:text-primary-600 transition-colors">
+                Quyền riêng tư
+              </NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/terms" class="hover:text-primary-600 transition-colors">
+                Điều khoản
+              </NuxtLink>
+            </li>
           </ul>
         </div>
       </div>
 
-      <!-- Footer Bottom -->
       <div
-        class="border-t border-gray-200 dark:border-gray-800 mt-8 pt-8 text-center text-gray-600 dark:text-gray-400"
+        class="mt-8 border-t border-slate-200 pt-8 text-center text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400"
       >
-        <p>&copy; 2024 {{ awesome.name }}. Made with ❤️ for German learners.</p>
+        <p>&copy; {{ year }} {{ awesome?.name }}. Học vui, học đều.</p>
       </div>
     </div>
   </footer>

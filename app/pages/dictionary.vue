@@ -1,13 +1,104 @@
 <script lang="ts" setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useDebounceFn, useIntersectionObserver } from '@vueuse/core'
 import { useAudioPlayback } from '~/composables/vocab/use-audio-playback'
 import { useLanguage, type LearningLanguage } from '~/composables/use-language'
+import { useSrsStore } from '~/stores/useSrsStore'
+import { useSession } from '~/composables/use-session'
 import type { VocabularyWord } from '~/utils/types'
 
 definePageMeta({ layout: 'page' })
-useHead({ title: 'Từ điển Theo Chủ Đề - Sprech Mit Uns' })
+useHead({ title: 'Tra Cứu Từ Điển Song Ngữ - Sprech Mit Uns' })
 
+const srsStore = useSrsStore()
 const { currentLanguage, setLanguage } = useLanguage()
+const { userId } = useSession()
+
+const savedWordMap = ref<Record<string, boolean>>({})
+const notebookWordMap = ref<Record<string, boolean>>({})
+const activeToastText = ref('')
+const activeToastSub = ref('')
+let inlineToastTimer: any = null
+
+const showToast = (title: string, sub: string) => {
+  activeToastText.value = title
+  activeToastSub.value = sub
+  if (inlineToastTimer) clearTimeout(inlineToastTimer)
+  inlineToastTimer = setTimeout(() => {
+    activeToastText.value = ''
+    activeToastSub.value = ''
+  }, 4000)
+}
+
+const handleAddToSrs = async (wordObj: VocabularyWord) => {
+  savedWordMap.value[wordObj.word] = true
+  showToast(
+    `Đã thêm "${wordObj.word}" vào ôn tập SRS`,
+    'Từ sẽ xuất hiện trong lịch ôn lặp lại ngắt quãng',
+  )
+  await srsStore.addToSrs(
+    wordObj.word,
+    getViMeaning(wordObj.meaning),
+    wordObj.language || selectedLang.value,
+    { example: wordObj.example || undefined },
+  )
+}
+
+const handleAddPhraseToSrs = async (wordObj: VocabularyWord) => {
+  if (!wordObj.example?.trim()) return
+  showToast(
+    `Đã thêm câu ví dụ vào SRS`,
+    'Ôn theo cụm (chunking) thay vì từ đơn',
+  )
+  await srsStore.addToSrs(
+    wordObj.word,
+    getViMeaning(wordObj.meaning),
+    wordObj.language || selectedLang.value,
+    { example: wordObj.example, asPhrase: true },
+  )
+}
+
+const handleSaveToNotebook = async (wordObj: VocabularyWord) => {
+  if (!wordObj.id || !userId.value) return
+  try {
+    await $fetch('/api/vocabulary', {
+      method: 'POST',
+      body: {
+        wordId: wordObj.id,
+        word: wordObj.word,
+        meaning: wordObj.meaning,
+        language: wordObj.language || selectedLang.value,
+        level: wordObj.level,
+        type: wordObj.type,
+        example: wordObj.example,
+        source: 'dictionary',
+      },
+    })
+    notebookWordMap.value[wordObj.id] = true
+    showToast(
+      `Đã lưu "${wordObj.word}" vào sổ từ vựng`,
+      'Xem lại trong Sổ từ vựng cá nhân — không phải SRS',
+    )
+  } catch (e) {
+    console.error(e)
+    showToast('Không lưu được vào sổ', 'Thử lại sau')
+  }
+}
+
+const loadNotebookIds = async () => {
+  if (!userId.value) return
+  try {
+    const res = await $fetch<{ wordIds: string[] }>('/api/vocabulary/saved-ids')
+    const map: Record<string, boolean> = {}
+    for (const id of res.wordIds || []) {
+      if (id) map[id] = true
+    }
+    notebookWordMap.value = map
+  } catch {
+    // ignore
+  }
+}
+
 const selectedLang = computed({
   get: () => currentLanguage.value,
   set: (val: LearningLanguage) => setLanguage(val),
@@ -15,83 +106,195 @@ const selectedLang = computed({
 const selectedLevel = ref('')
 const selectedType = ref('')
 const search = ref('')
-const activeTopicId = ref<string | null>(null)
 
 const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const wordTypes = [
   { label: 'Tất cả từ loại', value: '' },
-  { label: '🏷️ Danh từ (Noun)', value: 'Noun' },
-  { label: '⚡ Động từ (Verb)', value: 'Verb' },
-  { label: '🎨 Tính từ (Adjective)', value: 'Adjective' },
-  { label: '📍 Phó từ (Adverb)', value: 'Adverb' },
-  { label: '💬 Cụm từ / Thán từ', value: 'Phrase' },
-  { label: '🔢 Số đếm (Number)', value: 'Number' },
+  { label: 'Danh từ (Noun)', value: 'Noun' },
+  { label: 'Động từ (Verb)', value: 'Verb' },
+  { label: 'Tính từ (Adjective)', value: 'Adjective' },
+  { label: 'Phó từ (Adverb)', value: 'Adverb' },
+  { label: 'Cụm từ / Thán từ', value: 'Phrase' },
+  { label: 'Số đếm (Number)', value: 'Number' },
 ]
 
-const { data: topics, pending: loading } = useFetch<any[]>(() => `/api/dictionary/topic?lang=${selectedLang.value}`, {
-  server: false,
-  watch: [selectedLang],
-})
+type DictTopic = {
+  id: string
+  name: string
+  slug?: string | null
+  level?: string | null
+  language?: string
+  description?: string | null
+  words: VocabularyWord[]
+}
 
-const { playingWord, errorMessage: errorMessageAudio, playAudioOrSpeak } = useAudioPlayback()
+type TopicListResponse = {
+  topics: DictTopic[]
+  meta: {
+    page: number
+    limit: number
+    hasMore: boolean
+    totalTopics: number
+    totalWords: number
+  }
+}
 
-// Total Counts Computed
-const totalTopicsCount = computed(() => topics.value?.length || 0)
+const PAGE_SIZE = 4
+const topics = ref<DictTopic[]>([])
+const loading = ref(false)
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const page = ref(1)
+const totalTopicsCount = ref(0)
+const totalWordsCount = ref(0)
+const loadMoreSentinel = ref<HTMLElement | null>(null)
 
-const totalWordsCount = computed(() => {
-  if (!topics.value) return 0
-  return topics.value.reduce((acc, t) => acc + (t.words?.length || 0), 0)
-})
+const { playAudioOrSpeak, playingWord } = useAudioPlayback()
 
-// Filtered Topics & Words
-const filteredTopics = computed(() => {
-  if (!topics.value) return []
-  return topics.value
-    .map((topic) => {
-      // Filter words inside topic
-      const matchingWords = (topic.words || []).filter((w: VocabularyWord) => {
-        // Level filter
-        const matchesLevel = !selectedLevel.value || (w.level && w.level.toUpperCase() === selectedLevel.value.toUpperCase())
+type DictViewMode = 'grid' | 'book'
+const VIEW_STORAGE_KEY = 'smu-dict-view'
+const viewOptions: { value: DictViewMode, label: string, icon: string }[] = [
+  { value: 'grid', label: 'Thẻ', icon: 'lucide:layout-grid' },
+  { value: 'book', label: 'Sách', icon: 'lucide:book-open' },
+]
+const viewMode = ref<DictViewMode>('grid')
 
-        // Type filter (Noun, Verb, Adjective, Phrase/Interjection, etc.)
-        let matchesType = true
-        if (selectedType.value) {
-          if (selectedType.value === 'Phrase') {
-            matchesType = w.type === 'Phrase' || w.type === 'Interjection'
-          } else {
-            matchesType = w.type?.toLowerCase() === selectedType.value.toLowerCase()
-          }
-        }
+type WordListResponse = {
+  items: (VocabularyWord & {
+    topics?: { topic?: { name?: string | null } | null }[]
+  })[]
+  meta: { hasMore: boolean, totalCount: number }
+}
 
-        // Search Query filter
-        const query = search.value.trim().toLowerCase()
-        const matchesQuery =
-          !query ||
-          w.word.toLowerCase().includes(query) ||
-          w.meaning.toLowerCase().includes(query) ||
-          (w.example && w.example.toLowerCase().includes(query))
+const BOOK_PAGE_SIZE = 16
+const bookWords = ref<(VocabularyWord & { topicName?: string | null, transcription?: string | null })[]>([])
+const bookPage = ref(1)
+const bookHasMore = ref(true)
+const bookLoading = ref(false)
+const bookLoadingMore = ref(false)
+const bookTotal = ref(0)
 
-        return matchesLevel && matchesType && matchesQuery
-      })
+const fetchBookPage = async (reset = false) => {
+  if (reset) {
+    bookPage.value = 1
+    bookHasMore.value = true
+    bookWords.value = []
+    bookLoading.value = true
+  }
+  else {
+    if (!bookHasMore.value || bookLoadingMore.value || bookLoading.value) return
+    bookLoadingMore.value = true
+    bookPage.value += 1
+  }
 
-      return {
-        ...topic,
-        filteredWords: matchingWords,
-      }
+  try {
+    const res = await $fetch<WordListResponse>('/api/dictionary', {
+      query: {
+        language: selectedLang.value,
+        page: bookPage.value,
+        limit: BOOK_PAGE_SIZE,
+        ...(search.value.trim() ? { search: search.value.trim() } : {}),
+        ...(selectedLevel.value ? { level: selectedLevel.value } : {}),
+        ...(selectedType.value ? { type: selectedType.value } : {}),
+      },
     })
-    .filter((topic) => {
-      if (search.value || selectedLevel.value || selectedType.value) {
-        return topic.filteredWords.length > 0
-      }
-      return true
+    const mapped = (res.items || []).map(word => ({
+      ...word,
+      topicName: word.topics?.[0]?.topic?.name || null,
+      transcription: word.transcription || word.pronunciation,
+    }))
+    bookWords.value = reset ? mapped : [...bookWords.value, ...mapped]
+    bookHasMore.value = res.meta.hasMore
+    bookTotal.value = res.meta.totalCount
+  }
+  catch (e) {
+    console.error(e)
+    if (reset) bookWords.value = []
+    if (!reset) bookPage.value = Math.max(1, bookPage.value - 1)
+  }
+  finally {
+    bookLoading.value = false
+    bookLoadingMore.value = false
+  }
+}
+
+watch(viewMode, (mode) => {
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, mode)
+  }
+  catch {}
+  if (mode === 'book' && bookWords.value.length === 0) fetchBookPage(true)
+  if (mode === 'grid' && topics.value.length === 0) fetchTopicsPage(true)
+})
+
+const fetchTopicsPage = async (reset: boolean) => {
+  if (reset) {
+    page.value = 1
+    hasMore.value = true
+    topics.value = []
+    loading.value = true
+  } else {
+    if (!hasMore.value || loadingMore.value || loading.value) return
+    loadingMore.value = true
+  }
+
+  try {
+    const res = await $fetch<TopicListResponse>('/api/dictionary/topic', {
+      query: {
+        lang: selectedLang.value,
+        page: page.value,
+        limit: PAGE_SIZE,
+        ...(search.value.trim() ? { search: search.value.trim() } : {}),
+        ...(selectedLevel.value ? { level: selectedLevel.value } : {}),
+        ...(selectedType.value ? { type: selectedType.value } : {}),
+      },
     })
+
+    topics.value = reset ? res.topics : [...topics.value, ...res.topics]
+    hasMore.value = res.meta.hasMore
+    totalTopicsCount.value = res.meta.totalTopics
+    totalWordsCount.value = res.meta.totalWords
+    if (res.meta.hasMore) page.value += 1
+  } catch (e) {
+    console.error(e)
+    if (reset) topics.value = []
+  } finally {
+    loading.value = false
+    loadingMore.value = false
+  }
+}
+
+const reloadFromFilters = useDebounceFn(() => {
+  if (viewMode.value === 'book') fetchBookPage(true)
+  else fetchTopicsPage(true)
+}, 280)
+
+watch(
+  [selectedLang, selectedLevel, selectedType, search],
+  () => reloadFromFilters(),
+)
+
+useIntersectionObserver(loadMoreSentinel, (entries) => {
+  if (entries[0]?.isIntersecting) fetchTopicsPage(false)
 })
 
-const filteredWordsCount = computed(() => {
-  return filteredTopics.value.reduce((acc, t) => acc + (t.filteredWords?.length || 0), 0)
+onMounted(() => {
+  try {
+    if (localStorage.getItem(VIEW_STORAGE_KEY) === 'book') viewMode.value = 'book'
+  }
+  catch {}
+  loadNotebookIds()
+  if (viewMode.value === 'book') fetchBookPage(true)
+  else fetchTopicsPage(true)
 })
 
-// Independent open states for each topic (by default all topics are open)
+const filteredTopics = computed(() =>
+  topics.value.map((topic) => ({
+    ...topic,
+    filteredWords: topic.words || [],
+  })),
+)
+
 const closedTopicIds = ref<Set<string>>(new Set())
 
 const toggleTopic = (id: string) => {
@@ -130,225 +333,339 @@ const clearFilters = () => {
 
 <template>
   <LayoutPageWrapper class="min-h-screen">
-    <LayoutPageHeader class="mb-8">
-      <div class="flex items-center justify-between flex-wrap gap-4 mb-2">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="px-3 py-1 text-xs font-extrabold rounded-lg bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 tracking-wider">
-            TOPIC DICTIONARY
-          </span>
-          <!-- Total Stats Badge -->
-          <span v-if="!loading" class="px-3 py-1 text-xs font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-            <Icon name="uil:book-alt" class="w-4 h-4 text-teal-500" />
-            <span>Kho từ: <strong class="text-teal-600 dark:text-teal-400 font-extrabold">{{ totalWordsCount }}</strong> từ vựng / <strong class="text-slate-900 dark:text-white font-extrabold">{{ totalTopicsCount }}</strong> chủ đề</span>
-          </span>
-        </div>
-
-        <!-- Language Switcher -->
-        <div class="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <button
-            @click="selectedLang = 'de'; clearFilters()"
-            :class="selectedLang === 'de' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
-            class="px-3.5 py-1.5 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>🇩🇪 Tiếng Đức</span>
-          </button>
-          <button
-            @click="selectedLang = 'cs'; clearFilters()"
-            :class="selectedLang === 'cs' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'"
-            class="px-3.5 py-1.5 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>🇨🇿 Tiếng Séc</span>
-          </button>
-        </div>
-      </div>
-
-      <LayoutPageTitle text="Từ Điển Phân Loại Theo Chủ Đề & Từ Loại" class="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white" />
-      <p class="text-slate-600 dark:text-slate-400 text-sm md:text-base mt-1">
-        Tra cứu kho từ vựng tiếng Đức & Séc, được phân loại theo từng danh mục bài học, cấp độ và từ loại (Danh từ, Động từ, Tính từ,...).
-      </p>
-    </LayoutPageHeader>
-
-    <div class="w-full space-y-6">
-      <!-- Search Bar & Filters Section -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div class="flex flex-col md:flex-row gap-4 items-center">
-          <!-- Main Search Input -->
-          <div class="relative flex-1 w-full">
-            <Icon name="uil:search" class="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              v-model="search"
-              type="text"
-              placeholder="Tra cứu từ vựng theo tên từ, ý nghĩa hoặc ví dụ..."
-              class="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-semibold text-slate-900 dark:text-white placeholder-slate-400 text-base focus:outline-hidden focus:border-teal-500 transition-all"
-            />
-            <button
-              v-if="search"
-              @click="search = ''"
-              class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-            >
-              <Icon name="uil:times" class="w-5 h-5" />
-            </button>
-          </div>
-
-          <!-- Level Filter Pills -->
-          <div class="flex items-center gap-2 flex-wrap w-full md:w-auto">
-            <button
-              @click="selectedLevel = ''"
-              :class="!selectedLevel ? 'bg-teal-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'"
-              class="px-3.5 py-2 font-bold text-xs rounded-xl transition-all cursor-pointer"
-            >
-              Tất cả Cấp Độ
-            </button>
-            <button
-              v-for="lvl in levels"
-              :key="lvl"
-              @click="selectedLevel = lvl"
-              :class="selectedLevel === lvl ? 'bg-teal-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'"
-              class="px-3.5 py-2 font-bold text-xs rounded-xl transition-all cursor-pointer"
-            >
-              {{ lvl }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Word Type Filter Bar -->
-        <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2 flex-wrap">
-          <span class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mr-1">Phân Loại Từ:</span>
-          <button
-            v-for="t in wordTypes"
-            :key="t.value"
-            @click="selectedType = t.value"
-            :class="selectedType === t.value ? 'bg-teal-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
-            class="px-3 py-1.5 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1"
-          >
-            {{ t.label }}
-          </button>
-
-          <button
-            v-if="search || selectedLevel || selectedType"
-            @click="clearFilters"
-            class="ml-auto px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
-          >
-            <Icon name="uil:redo" class="w-3.5 h-3.5" /> Xóa tất cả bộ lọc
-          </button>
-        </div>
-
-        <!-- Filter Results Counter Bar -->
-        <div v-if="search || selectedLevel || selectedType" class="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 text-xs font-semibold text-slate-500">
-          <span>
-            Tìm thấy <strong class="text-teal-600 dark:text-teal-400 font-extrabold text-sm">{{ filteredWordsCount }}</strong> từ vựng phù hợp trong {{ filteredTopics.length }} chủ đề
-          </span>
-          <span class="italic text-slate-400">
-            Đang lọc: {{ search ? `"${search}"` : '' }} {{ selectedLevel ? `[Cấp độ ${selectedLevel}]` : '' }} {{ selectedType ? `[Từ loại ${selectedType}]` : '' }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Loading State -->
-      <div v-if="loading" class="text-center py-16">
-        <LayoutPageLoading />
-      </div>
-
-      <!-- Empty State -->
-      <div
-        v-else-if="!filteredTopics.length"
-        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-500 space-y-3"
-      >
-        <Icon name="uil:search-minus" class="w-12 h-12 mx-auto text-slate-400" />
-        <p class="text-base font-bold text-slate-700 dark:text-slate-300">Không tìm thấy từ vựng nào khớp với bộ lọc từ loại/tìm kiếm.</p>
-      </div>
-
-      <!-- Topic List Groups (2-column masonry grid layout) -->
-      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <div
-          v-for="topic in filteredTopics"
-          :key="topic.id"
-          class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs transition-all"
-        >
-          <!-- Topic Header -->
-          <div
-            @click="toggleTopic(topic.id)"
-            class="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
-          >
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-extrabold text-lg">
-                <Icon name="uil:folder" class="w-5 h-5" />
-              </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">{{ topic.name }}</h3>
-                  <span class="px-2.5 py-0.5 text-[10px] font-extrabold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                    {{ topic.level || 'A1' }}
-                  </span>
-                </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {{ topic.filteredWords?.length || 0 }} từ vựng {{ search || selectedLevel || selectedType ? 'khớp bộ lọc' : '' }}
-                </p>
-              </div>
+    <LayoutPageSection>
+      <!-- Full Widescreen Layout -->
+      <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6 text-left">
+        <!-- Page Header -->
+        <div class="flex items-center justify-between flex-wrap gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-6">
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="px-3.5 py-1 text-xs font-extrabold rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 uppercase tracking-wider">
+              Kho từ điển chung
+            </span>
+              <span v-if="!loading" class="px-3.5 py-1 text-xs font-extrabold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+                <Icon name="lucide:book-open" class="w-4 h-4 text-primary-500" />
+                <span>Kho từ: <strong class="text-primary-500 font-extrabold text-sm">{{ totalWordsCount }}</strong> từ vựng / <strong class="text-slate-900 dark:text-white font-extrabold text-sm">{{ totalTopicsCount }}</strong> chủ đề</span>
+              </span>
             </div>
 
-            <div class="flex items-center gap-3">
-              <NuxtLink
-                :to="topic.slug ? `/lesson?topic=${topic.slug}` : '/lesson'"
-                @click.stop
-                class="px-3.5 py-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/60 border border-teal-200 dark:border-teal-900/60 rounded-xl transition-all flex items-center gap-1.5"
-              >
-                <Icon name="uil:book-open" class="w-4 h-4" /> Học bài này
-              </NuxtLink>
-              <Icon
-                :name="isTopicOpen(topic.id) ? 'uil:angle-up' : 'uil:angle-down'"
-                class="w-6 h-6 text-slate-400"
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Tra Cứu Từ Điển Phân Loại Theo Chủ Đề
+            </h1>
+            <p class="text-slate-600 dark:text-slate-400 text-base md:text-lg leading-relaxed">
+              Tra cứu kho từ hệ thống theo chủ đề. Có thể
+              <strong class="font-semibold text-slate-800 dark:text-slate-200"> lưu vào sổ cá nhân</strong>
+              hoặc
+              <strong class="font-semibold text-slate-800 dark:text-slate-200"> thêm vào SRS</strong>
+              để ôn — hai việc khác nhau.
+            </p>
+          </div>
+
+          <!-- Language Switcher -->
+          <div class="inline-flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <button
+              @click="selectedLang = 'de'; clearFilters()"
+              :class="selectedLang === 'de' ? 'bg-white dark:bg-slate-900 text-primary-500 shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+              class="px-5 py-2.5 font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>🇩🇪 Tiếng Đức</span>
+            </button>
+            <button
+              @click="selectedLang = 'cs'; clearFilters()"
+              :class="selectedLang === 'cs' ? 'bg-white dark:bg-slate-900 text-primary-500 shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+              class="px-5 py-2.5 font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>🇨🇿 Tiếng Séc</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Bar & Filter Surface -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-5">
+          <div class="flex flex-col lg:flex-row gap-4 items-center">
+            <!-- Large Search Input -->
+            <div class="relative flex-1 w-full">
+              <Icon name="lucide:search" class="w-6 h-6 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                v-model="search"
+                type="text"
+                placeholder="Tra cứu từ vựng theo tên từ, ý nghĩa tiếng Việt / Anh hoặc câu ví dụ..."
+                class="w-full pl-13 pr-12 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl font-bold text-slate-900 dark:text-white placeholder-slate-400 text-base md:text-lg focus:outline-none focus:border-primary-500 transition-all"
               />
+              <button
+                v-if="search"
+                @click="search = ''"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <Icon name="lucide:x" class="w-6 h-6" />
+              </button>
+            </div>
+
+            <!-- Level Filter Pills -->
+            <div class="flex items-center gap-2 flex-wrap w-full lg:w-auto">
+              <button
+                @click="selectedLevel = ''"
+                :class="!selectedLevel ? 'bg-primary-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'"
+                class="px-4 py-2.5 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+              >
+                Tất cả Cấp Độ
+              </button>
+              <button
+                v-for="lvl in levels"
+                :key="lvl"
+                @click="selectedLevel = lvl"
+                :class="selectedLevel === lvl ? 'bg-primary-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'"
+                class="px-4 py-2.5 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+              >
+                {{ lvl }}
+              </button>
             </div>
           </div>
 
-          <!-- Words Grid inside Topic -->
-          <div
-            v-if="isTopicOpen(topic.id)"
-            class="p-5 pt-0 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/40"
-          >
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div
-                v-for="word in topic.filteredWords"
-                :key="word.id || word.word"
-                class="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl p-4 shadow-2xs hover:border-teal-300 transition-all flex justify-between items-start gap-3"
+          <!-- Word Type Filter Bar -->
+          <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mr-2">Từ Loại:</span>
+            <button
+              v-for="t in wordTypes"
+              :key="t.value"
+              @click="selectedType = t.value"
+              :class="selectedType === t.value ? 'bg-primary-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+              class="px-4 py-2 font-bold text-sm rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              {{ t.label }}
+            </button>
+
+            <button
+              v-if="search || selectedLevel || selectedType"
+              @click="clearFilters"
+              class="px-4 py-2 text-sm font-extrabold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Icon name="lucide:rotate-ccw" class="w-4 h-4" />
+              <span>Xóa bộ lọc</span>
+            </button>
+
+            <div
+              class="ml-auto inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800"
+              role="radiogroup"
+              aria-label="Kiểu hiển thị"
+            >
+              <button
+                v-for="opt in viewOptions"
+                :key="opt.value"
+                type="button"
+                role="radio"
+                :aria-checked="viewMode === opt.value"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold active:scale-95 transition-all duration-200 cursor-pointer"
+                :class="
+                  viewMode === opt.value
+                    ? 'bg-white dark:bg-slate-900 text-primary-700 dark:text-primary-300 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                "
+                @click="viewMode = opt.value"
               >
-                <div class="space-y-1.5 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-lg font-extrabold text-slate-900 dark:text-white">{{ word.word }}</span>
-                    <span v-if="word.type" class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-900/60">
-                      {{ word.type === 'Noun' ? 'Danh từ' : word.type === 'Verb' ? 'Động từ' : word.type === 'Adjective' ? 'Tính từ' : word.type === 'Adverb' ? 'Phó từ' : word.type === 'Number' ? 'Số đếm' : word.type }}
+                <Icon :name="opt.icon" class="w-4 h-4" />
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="(viewMode === 'book' ? bookLoading : loading) && (viewMode === 'book' ? bookWords.length === 0 : topics.length === 0)" class="text-center py-20">
+          <LayoutPageLoading />
+        </div>
+
+        <!-- Empty State -->
+        <div
+          v-else-if="viewMode === 'book' ? !bookWords.length : !filteredTopics.length"
+          class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-16 text-center text-slate-500 space-y-4"
+        >
+          <Icon name="lucide:search-x" class="w-16 h-16 mx-auto text-slate-400" />
+          <p class="text-lg font-bold text-slate-700 dark:text-slate-300">Không tìm thấy từ vựng nào khớp với bộ lọc tìm kiếm hiện tại.</p>
+        </div>
+
+        <AwesomeVocabBook
+          v-else-if="viewMode === 'book'"
+          variant="dictionary"
+          :entries="bookWords"
+          :playing-word="playingWord"
+          :has-more="bookHasMore"
+          :loading="bookLoadingMore"
+          :language="selectedLang"
+          :total-count="bookTotal"
+          :notebook-ids="notebookWordMap"
+          :srs-words="savedWordMap"
+          @play="(w) => playAudioOrSpeak({ word: w.word, paragraph: w.word, audioUrl: w.audioUrl || w.vocabularyWord?.audioUrl, pronunciation: w.pronunciation || w.vocabularyWord?.pronunciation, lang: w.language || selectedLang })"
+          @save-notebook="handleSaveToNotebook"
+          @add-srs="handleAddToSrs"
+          @add-phrase="handleAddPhraseToSrs"
+          @load-more="fetchBookPage(false)"
+        />
+
+        <!-- Topic List Groups (2-column full-width grid layout) -->
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          <div
+            v-for="topic in filteredTopics"
+            :key="topic.id"
+            class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs transition-all"
+          >
+            <!-- Topic Header -->
+            <div
+              @click="toggleTopic(topic.id)"
+              class="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
+            >
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 flex items-center justify-center font-extrabold text-xl">
+                  <Icon name="lucide:folder" class="w-6 h-6" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-2.5">
+                    <h3 class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white">{{ topic.name }}</h3>
+                    <span class="px-3 py-0.5 text-xs font-extrabold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {{ topic.level || 'A1' }}
                     </span>
-                    <span v-if="word.pronunciation" class="text-xs text-slate-400 font-mono">{{ word.pronunciation }}</span>
                   </div>
-                  <!-- Trilingual Flag Meanings (Vietnamese & English SVG Flag Icons) -->
-                  <div class="flex flex-col gap-1.5 text-sm mt-1">
-                    <div class="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-100">
-                      <Icon name="twemoji:flag-vietnam" class="w-4 h-4 shrink-0 shadow-2xs" />
-                      <span>{{ getViMeaning(word.meaning) }}</span>
-                    </div>
-                    <div v-if="getEnMeaning(word.meaning)" class="flex items-center gap-2 font-semibold text-sky-600 dark:text-sky-400 text-xs">
-                      <Icon name="twemoji:flag-united-kingdom" class="w-4 h-4 shrink-0 shadow-2xs" />
-                      <span>{{ getEnMeaning(word.meaning) }}</span>
-                    </div>
-                  </div>
-                  <p v-if="word.example" class="text-xs text-slate-500 italic bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800/60">
-                    "{{ word.example }}"
+                  <p class="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                    {{ topic.filteredWords?.length || 0 }} từ vựng {{ search || selectedLevel || selectedType ? 'khớp bộ lọc' : '' }}
                   </p>
                 </div>
+              </div>
 
-                <button
-                  @click="playAudioOrSpeak(word)"
-                  title="Nghe phát âm"
-                  class="w-9 h-9 shrink-0 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 hover:bg-teal-500 hover:text-white flex items-center justify-center transition-all cursor-pointer border border-teal-200 dark:border-teal-900/60"
+              <div class="flex items-center gap-3">
+                <NuxtLink
+                  :to="topic.slug ? `/lesson?topic=${topic.slug}` : '/lesson'"
+                  @click.stop
+                  class="px-4 py-2 text-sm font-extrabold text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/60 border border-primary-200 dark:border-primary-900/60 rounded-xl transition-all flex items-center gap-2"
                 >
-                  <Icon name="uil:volume-up" class="w-5 h-5" />
-                </button>
+                  <Icon name="lucide:book-open" class="w-4 h-4" />
+                  <span>Học bài này</span>
+                </NuxtLink>
+                <Icon
+                  :name="isTopicOpen(topic.id) ? 'lucide:chevron-up' : 'lucide:chevron-down'"
+                  class="w-6 h-6 text-slate-400"
+                />
+              </div>
+            </div>
+
+            <!-- Words Grid inside Topic (Big text sizes) -->
+            <div
+              v-if="isTopicOpen(topic.id)"
+              class="p-6 pt-0 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/40"
+            >
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                <div
+                  v-for="word in topic.filteredWords"
+                  :key="word.id || word.word"
+                  class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs hover:border-primary-500 transition-all flex justify-between items-start gap-4"
+                >
+                  <div class="space-y-2 flex-1">
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                      <span class="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-wide">{{ word.word }}</span>
+                      <span v-if="word.type" class="text-xs font-extrabold px-2.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 border border-emerald-200 dark:border-emerald-900/60">
+                        {{ word.type === 'Noun' ? 'Danh từ' : word.type === 'Verb' ? 'Động từ' : word.type === 'Adjective' ? 'Tính từ' : word.type === 'Adverb' ? 'Phó từ' : word.type === 'Number' ? 'Số đếm' : word.type }}
+                      </span>
+                      <span v-if="word.pronunciation" class="text-sm text-slate-400 font-mono font-semibold">{{ word.pronunciation }}</span>
+                    </div>
+
+                    <div class="flex flex-col gap-2 text-base mt-2">
+                      <div class="flex items-center gap-2 font-extrabold text-slate-800 dark:text-slate-100 text-base md:text-lg">
+                        <Icon name="twemoji:flag-vietnam" class="w-5 h-5 shrink-0" />
+                        <span>{{ getViMeaning(word.meaning) }}</span>
+                      </div>
+                      <div v-if="getEnMeaning(word.meaning)" class="flex items-center gap-2 font-bold text-slate-500 text-sm md:text-base">
+                        <Icon name="twemoji:flag-united-kingdom" class="w-5 h-5 shrink-0" />
+                        <span>{{ getEnMeaning(word.meaning) }}</span>
+                      </div>
+                    </div>
+
+                    <p v-if="word.example" class="text-sm text-slate-600 dark:text-slate-300 font-medium italic bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 mt-2">
+                      "{{ word.example }}"
+                    </p>
+                  </div>
+
+                  <div class="flex flex-col gap-2 shrink-0 items-end">
+                    <button
+                      @click="playAudioOrSpeak({ word: word.word, paragraph: word.word, audioUrl: word.audioUrl, lang: word.language || selectedLang })"
+                      title="Nghe phát âm"
+                      class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-primary-500 hover:text-white text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                    >
+                      <Icon name="lucide:volume-2" class="w-5 h-5" />
+                    </button>
+                    <button
+                      @click="handleSaveToNotebook(word)"
+                      :title="notebookWordMap[word.id] ? 'Đã lưu vào sổ' : 'Lưu vào sổ từ vựng'"
+                      :class="notebookWordMap[word.id] ? 'bg-blue-500 text-white border-blue-500' : 'bg-blue-50 dark:bg-blue-950/80 hover:bg-blue-500 hover:text-white text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60'"
+                      class="w-10 h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0"
+                    >
+                      <Icon :name="notebookWordMap[word.id] ? 'lucide:book-check' : 'lucide:book-plus'" class="w-5 h-5" />
+                    </button>
+                    <button
+                      @click="handleAddToSrs(word)"
+                      :title="savedWordMap[word.word] ? 'Đã thêm vào SRS' : 'Thêm vào ôn tập SRS'"
+                      :class="savedWordMap[word.word] ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-emerald-50 dark:bg-emerald-950/80 hover:bg-emerald-500 hover:text-white text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60'"
+                      class="w-10 h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0"
+                    >
+                      <Icon :name="savedWordMap[word.word] ? 'carbon:checkmark' : 'carbon:bookmark-add'" class="w-5 h-5" />
+                    </button>
+                    <button
+                      v-if="word.example"
+                      @click="handleAddPhraseToSrs(word)"
+                      title="Ôn cả câu ví dụ (chunking)"
+                      class="w-10 h-10 rounded-xl border border-sky-200 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/80 hover:bg-sky-500 hover:text-white text-sky-600 dark:text-sky-400 flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0"
+                    >
+                      <Icon name="lucide:quote" class="w-5 h-5" />
+                    </button>
+                  </div>
+
+                </div>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Infinite scroll sentinel -->
+        <div
+          v-if="filteredTopics.length && viewMode === 'grid'"
+          ref="loadMoreSentinel"
+          class="flex flex-col items-center justify-center gap-2 py-10"
+          aria-hidden="true"
+        >
+          <div
+            v-if="loadingMore"
+            class="inline-flex items-center gap-2 text-sm font-bold text-slate-500"
+          >
+            <Icon name="lucide:loader-2" class="h-5 w-5 animate-spin text-primary-500" />
+            Đang tải thêm chủ đề…
+          </div>
+          <p
+            v-else-if="!hasMore"
+            class="text-sm font-semibold text-slate-400"
+          >
+            Đã hết {{ totalTopicsCount }} chủ đề
+          </p>
+        </div>
       </div>
+    </LayoutPageSection>
+
+    <!-- Inline Guaranteed Toast Notification -->
+    <div
+      v-if="activeToastText"
+      class="fixed bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
+      style="box-shadow: 0 15px 35px -5px rgba(16, 185, 129, 0.4);"
+    >
+      <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md">
+        <Icon name="carbon:checkmark-outline" class="w-6 h-6 text-white" />
+      </div>
+      <div class="flex flex-col pr-3">
+        <span class="text-base text-emerald-400 font-extrabold">{{ activeToastText }}</span>
+        <span class="text-xs font-semibold text-slate-300">{{ activeToastSub }}</span>
+      </div>
+      <button
+        @click="activeToastText = ''"
+        class="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors"
+      >
+        <Icon name="carbon:close" class="w-5 h-5" />
+      </button>
     </div>
   </LayoutPageWrapper>
 </template>

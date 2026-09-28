@@ -17,6 +17,20 @@ Tài liệu tổng hợp kiến trúc hệ thống, danh sách tính năng đã 
 
 ---
 
+## 2. Quy Tắc Phát Triển Frontend & Tái Sử Dụng Component (Component Reuse & Rules)
+
+Để tránh lãng phí thời gian và làm giảm tính nhất quán của hệ thống, mọi nhà phát triển (bao gồm AI sub-agent) **bắt buộc phải tuân thủ nghiêm ngặt 3 quy tắc Frontend**:
+
+1. 🔍 **Kiểm Tra Thư Mục Component Trước Khi Viết Code**:
+   - Trước khi tạo bất kỳ trang nào (`app/pages/*`) hoặc tính năng mới, **bắt buộc phải quét thư mục `components/`** để kiểm tra các component UI dùng chung có sẵn (`components/awesome/*`, `components/layouts/*`, `components/layouts/Page/Section/*`).
+2. 🔄 **Bắt Buộc Tái Sử Dụng Component Đã Có**:
+   - **Tái sử dụng Thẻ Flashcard**: Trang Ôn tập SRS (`app/pages/review.vue`) và các bài tập luyện tập bắt buộc sử dụng component Flashcard đã chuẩn hóa (`components/layouts/Page/Section/flashCardSection.vue` hoặc các awesome UI card), tuyệt đối **KHÔNG tự code lại giao diện thẻ Flashcard từ đầu**.
+   - **Tái sử dụng Button/Card/Input**: Mọi nút bấm, modal, form input phải dùng các component `awesome/Button`, `awesome/Card`, `awesome/Form/TextInput`.
+3. 🛑 **Nguyên Tắc "Không Tái Tạo Bánh Xe Bò" (DRY - Don't Repeat Yourself)**:
+   - Chỉ được tạo mới component khi và chỉ khi tính năng hoặc giao diện đó **hoàn toàn chưa từng có** trong toàn bộ dự án.
+
+---
+
 ## 2. Đóng Gói Các Tính Năng Hiện Tại (Feature List)
 
 ### 2.1. Từ Điển Phân Loại Theo Chủ Đề & Từ Loại (Multi-Language Smart Dictionary)

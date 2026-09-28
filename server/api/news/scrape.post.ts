@@ -1,4 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
+import { assertRateLimit, clientIp } from '~/server/utils/rate-limit'
+import { requireUserId } from '~/server/utils/user'
 
 interface ScrapedArticle {
   id: string
@@ -12,8 +14,29 @@ interface ScrapedArticle {
   isSaved?: boolean
 }
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&Aacute;/g, 'Á').replace(/&aacute;/g, 'á')
+    .replace(/&Ccaron;/g, 'Č').replace(/&ccaron;/g, 'č')
+    .replace(/&Dcaron;/g, 'Ď').replace(/&dcaron;/g, 'ď')
+    .replace(/&Eacute;/g, 'É').replace(/&eacute;/g, 'é')
+    .replace(/&Ecaron;/g, 'Ě').replace(/&ecaron;/g, 'ě')
+    .replace(/&Iacute;/g, 'Í').replace(/&iacute;/g, 'í')
+    .replace(/&Ncaron;/g, 'Ň').replace(/&ncaron;/g, 'ň')
+    .replace(/&Oacute;/g, 'Ó').replace(/&oacute;/g, 'ó')
+    .replace(/&Rcaron;/g, 'Ř').replace(/&rcaron;/g, 'ř')
+    .replace(/&Scaron;/g, 'Š').replace(/&scaron;/g, 'š')
+    .replace(/&Tcaron;/g, 'Ť').replace(/&tcaron;/g, 'ť')
+    .replace(/&Uacute;/g, 'Ú').replace(/&uacute;/g, 'ú')
+    .replace(/&Uring;/g, 'Ů').replace(/&uring;/g, 'ů')
+    .replace(/&Yacute;/g, 'Ý').replace(/&yacute;/g, 'ý')
+    .replace(/&Zcaron;/g, 'Ž').replace(/&zcaron;/g, 'ž')
+}
+
 function cleanHtmlText(rawHtml: string): string {
-  return rawHtml
+  const cleaned = rawHtml
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -27,9 +50,10 @@ function cleanHtmlText(rawHtml: string): string {
     .replace(/&gt;/g, '>')
     .replace(/\s+/g, ' ')
     .trim()
+  return decodeHtmlEntities(cleaned)
 }
 
-function estimateGermanCEFR(text: string): 'A1' | 'A2' | 'B1' | 'B2' | 'C1' {
+function estimateCEFR(text: string, lang = 'de'): 'A1' | 'A2' | 'B1' | 'B2' | 'C1' {
   const words = text.split(/\s+/).filter(Boolean)
   if (words.length === 0) return 'A2'
 
@@ -57,28 +81,81 @@ function formatDate(dateStr?: string): string {
   }
 }
 
-async function scrapeSingleUrl(targetUrl: string): Promise<ScrapedArticle> {
+async function scrapeSingleUrl(targetUrl: string, lang = 'de'): Promise<ScrapedArticle> {
   let urlToFetch = targetUrl.trim()
   if (!/^https?:\/\//i.test(urlToFetch)) {
     urlToFetch = 'https://' + urlToFetch
   }
 
-  const response = await fetch(urlToFetch, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
-    },
-  })
+  const acceptLangHeader = lang === 'cs' ? 'cs-CZ,cs;q=0.9,en;q=0.8' : 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7'
 
-  if (!response.ok) {
+  const headersList: Record<string, string>[] = [
+    {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': acceptLangHeader,
+      'Cookie': 'idnes_nastaveni=1; cmp=1; didomi_token=1; adsCMP=gemius=1; tech_max=aplikace=1; euconsent-v2=true',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+    },
+    {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': acceptLangHeader,
+      'Cookie': 'idnes_nastaveni=1; cmp=1; euconsent-v2=true',
+    },
+    {
+      'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)',
+      'Accept': '*/*',
+    },
+  ]
+
+  let response: Response | null = null
+  let lastStatus = 403
+
+  for (const h of headersList) {
+    try {
+      const res = await fetch(urlToFetch, { headers: h })
+      if (res.ok) {
+        response = res
+        break
+      }
+      lastStatus = res.status
+    } catch {
+      // Continue to next header
+    }
+  }
+
+  if (!response || !response.ok) {
     throw createError({
-      statusCode: response.status,
-      statusMessage: `Không thể truy cập URL: ${response.statusText}`,
+      statusCode: lastStatus || 403,
+      message: `Không thể truy cập URL trang báo (${urlToFetch}): Lỗi ${lastStatus} Forbidden / Blocked.`,
     })
   }
 
-  const html = await response.text()
+  const buffer = await response.arrayBuffer()
+  const contentType = response.headers.get('content-type') || ''
+
+  let encoding = 'utf-8'
+  if (/windows-1250/i.test(contentType) || /iso-8859-2/i.test(contentType)) {
+    encoding = 'windows-1250'
+  } else {
+    // Check meta charset in raw buffer bytes
+    const peekText = new TextDecoder('ascii').decode(buffer.slice(0, 1000))
+    if (/charset=["']?(windows-1250|iso-8859-2)/i.test(peekText)) {
+      encoding = 'windows-1250'
+    }
+  }
+
+  let html = ''
+  try {
+    html = new TextDecoder(encoding).decode(buffer)
+  } catch {
+    html = new TextDecoder('utf-8').decode(buffer)
+  }
 
   // Extract title
   let title = ''
@@ -93,53 +170,110 @@ async function scrapeSingleUrl(targetUrl: string): Promise<ScrapedArticle> {
     }
   }
 
-  title = title.replace(/\s*[-|]\s*(Tagesschau|DW|Spiegel|ZEIT ONLINE|ZDF|NDR|WDR|BR|n-tv|FAZ).*$/i, '').trim()
-  if (!title) title = 'Tin tức tiếng Đức mới'
+  title = title
+    .replace(/\s*[-|]\s*(Tagesschau|DW|Spiegel|ZEIT ONLINE|ZDF|NDR|WDR|BR|n-tv|FAZ|iROZHLAS|ČT24|iDNES|Novinky|Seznam Zprávy).*$/i, '')
+    .trim()
+  if (!title) title = lang === 'cs' ? 'Zprávy v češtině' : 'Tin tức tiếng Đức mới'
 
   let summary = ''
-  const ogDescMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
-    html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i)
+  const ogDescMatch =
+    html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+    html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:description["']/i) ||
+    html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i) ||
+    html.match(/<meta\s+content=["']([^"']+)["']\s+name=["']description["']/i)
   if (ogDescMatch) {
     summary = cleanHtmlText(ogDescMatch[1])
   }
 
-  // Scope extraction to <article> tag if available to strip header/footer/navigation noise
-  const articleMatch = html.match(/<article[\s\S]*?<\/article>/i)
-  const sourceHtml = articleMatch ? articleMatch[0] : html
+  // Strip non-content blocks (script, style, iframe, audio, video, nav, footer, header) before extracting text
+  const cleanBodyHtml = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<audio[\s\S]*?<\/audio>/gi, '')
+    .replace(/<video[\s\S]*?<\/video>/gi, '')
+    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
 
-  const paragraphMatches = [...sourceHtml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
-  const paragraphs: string[] = []
+  // Scope extraction to article containers if present, otherwise extract from cleanBodyHtml
+  const artTextIndex = cleanBodyHtml.indexOf('id="art-text"')
+  let scopedHtml = cleanBodyHtml
 
-  for (const m of paragraphMatches) {
-    let text = cleanHtmlText(m[1])
-
-    // Filter out image captions, video player messages, TV schedules, and URLs
-    if (
-      text.length >= 25 &&
-      !/^https?:\/\//i.test(text) &&
-      !/To view this video please enable JavaScript/i.test(text) &&
-      !/Hauptnavigation|springen|Zustimmen|datenschutz|impressum|copyright|newsletter|folgen sie|kontakt|datenschutz-einstellungen/i.test(text) &&
-      !/^Stand:\s*\d/i.test(text) &&
-      !/Dieses Thema im Programm/i.test(text)
-    ) {
-      // Remove inline image credits (e.g. Bild: dpa...)
-      text = text.replace(/Bild:\s*[^.]+\./gi, '').trim()
-      text = text.replace(/\s+mehr$/i, '').trim()
-
-      if (text.length >= 20) {
-        paragraphs.push(text)
-      }
+  if (artTextIndex !== -1) {
+    scopedHtml = cleanBodyHtml.slice(artTextIndex, artTextIndex + 15000)
+  } else {
+    const articleContentMatch =
+      cleanBodyHtml.match(/<article[\s\S]*?<\/article>/i) ||
+      cleanBodyHtml.match(/<main[\s\S]*?<\/main>/i) ||
+      cleanBodyHtml.match(/<div[^>]*class=["'][^"']*(b-detail|article-content|entry-content|post-content|content-article|art-text|bbtext|opener)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)
+    if (articleContentMatch) {
+      scopedHtml = articleContentMatch[0]
     }
   }
 
-  const fullContent = paragraphs.length > 0 ? paragraphs.join(' ') : summary || title
-  const finalSummary = summary || paragraphs[0] || 'Bài báo tiếng Đức được cào tự động.'
+  const extractFromHtml = (targetHtml: string): string[] => {
+    const blockMatches = [...targetHtml.matchAll(/<(p|h2|h3)[^>]*>([\s\S]*?)<\/\1>/gi)]
+    const result: string[] = []
+
+    for (const m of blockMatches) {
+      const tagName = m[1].toLowerCase()
+      let text = cleanHtmlText(m[2])
+
+      if (
+        text.length >= 15 &&
+        !/^https?:\/\//i.test(text) &&
+        !/Používání profilů|personalizovaného obsahu|Vytváření profilů|Měření výkonu|Technický provoz stránek|Zpracování údajů vydavateli|zpracování provádět|těmto účelům/i.test(text) &&
+        !/Vámi zvolené nastavení|zobrazováním cílené reklamy|Vyberte prosím znovu|jakou formou|máme zobrazovat obsah/i.test(text) &&
+        !/Mozilla\/5\.0|AppleWebKit|Chrome\/|Safari\//i.test(text) &&
+        !/To view this video please enable JavaScript/i.test(text) &&
+        !/Bez reklam|iDNES Premium|Můžete neomezeně číst|Už máte účet|Přihlaste se|S cílenou reklamou|Podrobné nastavení|reklama|využitím k těmto účelům|zpracovávání provádět|blokování reklam|blokované některé skripty|Vypnout blokování|Neblokujete reklamy|Napište nám/i.test(text) &&
+        !/Abyste mohli pokra|potřebujeme vědět|reklamu|neomezený přístup|Příhlaste se|Zachováme vám|souhlas s cílenou|zobrazování obsahu|osobní údaje|zpracováváme údaje/i.test(text) &&
+        !/Hauptnavigation|springen|Zustimmen|datenschutz|impressum|copyright|newsletter|folgen sie|kontakt|datenschutz-einstellungen|soukromí|cookies|podmínky/i.test(text) &&
+        !/^Stand:\s*\d/i.test(text) &&
+        !/Dieses Thema im Programm/i.test(text) &&
+        !/Foto:\s*|\/ Foto:\s*/i.test(text)
+      ) {
+        text = text.replace(/Bild:\s*[^.]+\./gi, '').trim()
+        text = text.replace(/Foto:\s*[^.]+\./gi, '').trim()
+        text = text.replace(/\s+mehr$/i, '').trim()
+
+        if (tagName === 'h2' || tagName === 'h3') {
+          text = `### ${text}`
+        }
+
+        if (text.length >= 12 && !result.includes(text)) {
+          result.push(text)
+        }
+      }
+    }
+    return result
+  }
+
+  let paragraphs = extractFromHtml(scopedHtml)
+  if (paragraphs.length === 0) {
+    paragraphs = extractFromHtml(cleanBodyHtml)
+  }
+
+  // Prepend lead summary paragraph (opener) if present and not already at top
+  if (summary && summary.length > 20) {
+    const cleanSummaryText = cleanHtmlText(summary)
+    if (cleanSummaryText && !paragraphs.some(p => p.includes(cleanSummaryText.slice(0, 25)))) {
+      paragraphs.unshift(cleanSummaryText)
+    }
+  }
+
+  // If page returned zero valid paragraphs due to Cookie/Paywall JS wall, use meta description summary
+  let fullContent = paragraphs.length > 0 ? paragraphs.join('\n\n') : summary || title
+  if (paragraphs.length === 0 && summary) {
+    fullContent = `⚠️ [CHÚ Ý: Trang báo (${new URL(urlToFetch).hostname}) yêu cầu xác minh Cookie tường lửa trên trình duyệt. Đã trích xuất đoạn tóm tắt bài báo đầy đủ dưới đây:]\n\n${summary}`
+  }
+  const finalSummary = summary || paragraphs[0] || (lang === 'cs' ? 'Článek byl automaticky stažen.' : 'Bài báo tiếng Đức được cào tự động.')
 
   return {
     id: `scraped-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     title,
     date: formatDate(),
-    level: estimateGermanCEFR(fullContent),
+    level: estimateCEFR(fullContent, lang),
     summary: finalSummary,
     content: fullContent,
     sourceUrl: urlToFetch,
@@ -148,11 +282,19 @@ async function scrapeSingleUrl(targetUrl: string): Promise<ScrapedArticle> {
   }
 }
 
-async function scrapeRssFeeds(source = 'all', count = 3): Promise<ScrapedArticle[]> {
-  const allRss = [
+async function scrapeRssFeeds(lang = 'de', source = 'all', count = 3): Promise<ScrapedArticle[]> {
+  const germanFeeds = [
     { key: 'tagesschau', name: 'Tagesschau', url: 'https://www.tagesschau.de/xml/rss2/' },
     { key: 'dw', name: 'Deutsche Welle', url: 'https://rss.dw.com/xml/rss-de-all' },
   ]
+
+  const czechFeeds = [
+    { key: 'irozhlas', name: 'iROZHLAS', url: 'https://www.irozhlas.cz/rss/irozhlas' },
+    { key: 'ct24', name: 'ČT24', url: 'https://ct24.ceskatelevize.cz/rss/main' },
+    { key: 'idnes', name: 'iDNES.cz', url: 'https://servis.idnes.cz/rss.aspx' },
+  ]
+
+  const allRss = lang === 'cs' ? czechFeeds : germanFeeds
 
   const selectedFeeds = source === 'all' ? allRss : allRss.filter((f) => f.key === source)
   const limitCount = Math.min(Math.max(1, count), 5)
@@ -163,8 +305,10 @@ async function scrapeRssFeeds(source = 'all', count = 3): Promise<ScrapedArticle
     try {
       const res = await fetch(feed.url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-          'Accept-Language': 'de-DE,de;q=0.9',
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+          'Accept-Language': lang === 'cs' ? 'cs-CZ,cs;q=0.9' : 'de-DE,de;q=0.9',
         },
       })
       if (!res.ok) continue
@@ -184,21 +328,35 @@ async function scrapeRssFeeds(source = 'all', count = 3): Promise<ScrapedArticle
 
         const rawTitle = titleMatch ? cleanHtmlText(titleMatch[1]) : ''
         const rawDesc = descMatch ? cleanHtmlText(descMatch[1]) : ''
-        const link = linkMatch ? cleanHtmlText(linkMatch[1]) : ''
+        let link = linkMatch ? cleanHtmlText(linkMatch[1]) : ''
+        // Clean CDATA or trailing spaces from RSS URL links
+        link = link.replace(/^<!\[CDATA\[|\]\]>$/g, '').trim()
+
         const pubDate = pubDateMatch ? pubDateMatch[1] : undefined
 
         if (!rawTitle) continue
 
-        let fullArticleText = rawDesc
+        let fullArticleText = ''
+        let scrapeErrMessage = ''
         if (link) {
           try {
-            const deepArticle = await scrapeSingleUrl(link)
-            if (deepArticle && deepArticle.content && deepArticle.content.length > rawDesc.length) {
+            const deepArticle = await scrapeSingleUrl(link, lang)
+            if (deepArticle && deepArticle.content && deepArticle.content.length > 50) {
               fullArticleText = deepArticle.content
+              // Prepend rawDesc from RSS item feed if it contains lead paragraph text missing from deep scrape
+              if (rawDesc && rawDesc.length > 25 && !fullArticleText.includes(rawDesc.slice(0, 30))) {
+                fullArticleText = `${rawDesc}\n\n${fullArticleText}`
+              }
             }
-          } catch {
-            // Fallback to RSS description
+          } catch (e: any) {
+            scrapeErrMessage = e.message || 'Lỗi truy cập chi tiết bài báo'
+            console.error(`Không thể cào sâu chi tiết link RSS (${link}):`, e)
           }
+        }
+
+        if (!fullArticleText) {
+          // If deep scraping failed, tag article content with a clear warning prefix or throw
+          fullArticleText = `⚠️ [CHÚ Ý: Không thể cào full nội dung do bị trang báo (${feed.name}) chặn 403. ${scrapeErrMessage}]\n\n${rawTitle}\n\n${rawDesc}`
         }
 
         const content = fullArticleText.length > 40 ? fullArticleText : `${rawTitle}. ${rawDesc}`
@@ -207,7 +365,7 @@ async function scrapeRssFeeds(source = 'all', count = 3): Promise<ScrapedArticle
           id: `rss-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`,
           title: rawTitle,
           date: formatDate(pubDate),
-          level: estimateGermanCEFR(content),
+          level: estimateCEFR(content, lang),
           summary: rawDesc || rawTitle,
           content: content,
           sourceUrl: link,
@@ -225,30 +383,34 @@ async function scrapeRssFeeds(source = 'all', count = 3): Promise<ScrapedArticle
 
 export default defineEventHandler(async (event) => {
   try {
+    await requireUserId(event)
+    assertRateLimit(`news:scrape:${clientIp(event)}`, 10, 60 * 60 * 1000)
+
     const body = await readBody(event).catch(() => ({}))
-    const { url, mode, source = 'all', count = 3 } = body
+    const { url, mode, source = 'all', count = 3, lang = 'de' } = body
 
     const maxCount = Math.min(Math.max(1, Number(count) || 3), 5)
+    const targetLang = lang === 'cs' ? 'cs' : 'de'
 
     if (mode === 'url' || url) {
       if (!url) {
         throw createError({
           statusCode: 400,
-          statusMessage: 'Vui lòng nhập liên kết URL bài báo tiếng Đức cần cào!',
+          statusMessage: 'Vui lòng nhập liên kết URL bài báo cần cào!',
         })
       }
-      const article = await scrapeSingleUrl(url)
+      const article = await scrapeSingleUrl(url, targetLang)
       return {
         success: true,
         articles: [article],
       }
     }
 
-    const articles = await scrapeRssFeeds(source, maxCount)
+    const articles = await scrapeRssFeeds(targetLang, source, maxCount)
     if (articles.length === 0) {
       throw createError({
         statusCode: 500,
-        statusMessage: 'Không thể cào tin tức tự động từ các trang báo tiếng Đức. Vui lòng thử cào bằng URL cụ thể.',
+        statusMessage: `Không thể cào tin tức tự động cho ngôn ngữ ${targetLang.toUpperCase()}. Vui lòng thử cào bằng URL cụ thể.`,
       })
     }
 
@@ -257,10 +419,10 @@ export default defineEventHandler(async (event) => {
       articles,
     }
   } catch (error: any) {
-    console.error('Scrape German News Error:', error)
+    console.error('Scrape News Error:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Lỗi khi cào tin tức tiếng Đức',
+      statusMessage: error.statusMessage || error.message || 'Lỗi khi cào tin tức',
     })
   }
 })

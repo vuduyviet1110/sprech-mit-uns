@@ -1,27 +1,26 @@
-import { defineEventHandler, getQuery } from 'h3'
+import { defineEventHandler } from 'h3'
 import { prisma } from '~/server/ultis/prisma'
+import { requireUserId } from '~/server/utils/user'
 
 export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
-  const userId = (query.userId as string) || 'user-demo-id'
+  const userId = await requireUserId(event)
 
-  // Total learned words for user
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { studyStreak: true, lastStudyDate: true },
+  })
+
   const totalLearned = await prisma.userWordProgress.count({
     where: { userId },
   })
 
-  // Mastered words count
   const masteredCount = await prisma.userWordProgress.count({
     where: {
       userId,
-      OR: [
-        { isMastered: true },
-        { masteryLevel: { gte: 4 } },
-      ],
+      isMastered: true,
     },
   })
 
-  // Words learned this week
   const oneWeekAgo = new Date()
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
   const learnedThisWeek = await prisma.userWordProgress.count({
@@ -31,10 +30,8 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  // Total vocabulary words in system
   const totalVocabWords = await prisma.vocabularyWord.count()
 
-  // Due count for SRS
   const now = new Date()
   const dueSrsCount = await prisma.userWordProgress.count({
     where: {
@@ -43,21 +40,24 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  // Calculate streak
-  const maxStreak = await prisma.userWordProgress.aggregate({
-    where: { userId },
-    _max: { streak: true },
+  const quizWins = await prisma.quizAttempt.count({
+    where: { userId, isCorrect: true },
   })
+
+  const currentStreak = user?.studyStreak || 0
 
   return {
     wordsLearned: totalLearned,
     learnedThisWeek,
     masteredCount,
     masteryRate: totalLearned > 0 ? Math.round((masteredCount / totalLearned) * 100) : 0,
-    currentStreak: maxStreak._max.streak || (totalLearned > 0 ? 1 : 0),
+    currentStreak,
+    streak: currentStreak,
+    lastStudyDate: user?.lastStudyDate || null,
     dueSrsCount,
     weeklyGoalTarget: 50,
     weeklyGoalCurrent: Math.min(learnedThisWeek, 50),
     totalVocabWords,
+    quizWins,
   }
 })

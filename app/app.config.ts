@@ -2,7 +2,7 @@ export default defineAppConfig({
   awesome: {
     name: 'Sprech Mit Uns',
     description:
-      'A focused language learning platform built with Nuxt.js and MongoDB, designed specifically for learners who already have a good command of English and want to advance their German skills. The platform offers tailored lessons, interactive exercises, and progress tracking to help users efficiently improve their German language proficiency while leveraging their existing English knowledge.',
+      'Nền tảng học tiếng Đức & tiếng Séc chủ động — flashcard 3D, SRS thông minh, nghe chép YouTube và đấu trường Quiz 60s giúp bạn ghi nhớ lâu và phản xạ nhanh.',
     project: {
       links: {
         github: 'https://github.com/vuduyviet1110',
@@ -12,6 +12,7 @@ export default defineAppConfig({
       page: {
         navbar: {
           menus: [
+            { type: 'link', title: 'Hôm nay', to: '/today' },
             { type: 'link', title: 'Học bài', to: '/progress' },
             { type: 'link', title: 'Từ điển', to: '/dictionary' },
             { type: 'link', title: 'Sổ từ vựng', to: '/vocabulary' },
@@ -20,6 +21,21 @@ export default defineAppConfig({
               type: 'dropdown',
               title: 'Luyện tập',
               children: [
+                {
+                  type: 'link',
+                  title: 'Shadowing',
+                  to: '/practice/shadowing',
+                },
+                {
+                  type: 'link',
+                  title: 'Ôn phát âm',
+                  to: '/practice/pronunciation',
+                },
+                {
+                  type: 'link',
+                  title: 'Active Recall',
+                  to: '/practice/recall',
+                },
                 {
                   type: 'link',
                   title: 'Đấu trường Quiz 60s',

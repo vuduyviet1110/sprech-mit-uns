@@ -1,5 +1,6 @@
 import { prisma } from '~/server/ultis/prisma'
 import { defineEventHandler, getQuery, readBody, createError } from 'h3'
+import { requireCatalogWriter } from '~/server/utils/catalog-write'
 
 export default defineEventHandler((event) => {
   const method = event.node.req.method
@@ -23,6 +24,7 @@ async function handleGet(event: any) {
     search,
     topic,
     level,
+    type,
     language,
     date,
     page = '1',
@@ -87,15 +89,26 @@ async function handleGet(event: any) {
     }
   }
 
+  const typeStr = type ? type.toString() : ''
+  const typeFilter = typeStr
+    ? typeStr === 'Phrase'
+      ? { type: { in: ['Phrase', 'Interjection'] } }
+      : { type: { equals: typeStr, mode: 'insensitive' } }
+    : {}
+
+  const searchStr = search ? search.toString().trim() : ''
+
   const where: any = {
-    ...(search && {
-      word: {
-        contains: search.toString(),
-        mode: 'insensitive',
-      },
+    ...(searchStr && {
+      OR: [
+        { word: { contains: searchStr, mode: 'insensitive' } },
+        { meaning: { contains: searchStr, mode: 'insensitive' } },
+        { example: { contains: searchStr, mode: 'insensitive' } },
+      ],
     }),
     ...(level && { level: level.toString() }),
     ...(language && { language: language.toString() }),
+    ...typeFilter,
     ...(topic && {
       topics: {
         some: {
@@ -138,6 +151,7 @@ async function handleGet(event: any) {
 }
 
 async function handlePost(event: any) {
+  await requireCatalogWriter(event)
   const body = await readBody(event)
   const {
     word,

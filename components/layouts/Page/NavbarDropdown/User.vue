@@ -1,50 +1,56 @@
 <script lang="ts" setup>
-const user = {
-  name: 'John Doe',
-  email: 'john.doe@example.com',
-  avatar: 'game-icons:balaclava',
-}
+import { useSession } from '~/composables/use-session'
 
-const menuItems = [
-  {
-    type: 'link',
-    title: 'Profile',
-    to: '/profile',
-    icon: 'mdi:account',
-  },
-  {
-    type: 'link',
-    title: 'Settings',
-    to: '/setting',
-    icon: 'mdi:cog',
-  },
-  {
-    type: 'divider',
-  },
-  {
-    type: 'link',
-    title: 'Sign out',
-    to: '/logout',
-    icon: 'mdi:logout',
-  },
-]
+const { isAuthenticated, fetchMe, clearSession } = useSession()
+const meEmail = ref<string | null>(null)
+const displayName = computed(() => {
+  if (!meEmail.value) return 'Khách'
+  return meEmail.value.split('@')[0] || 'Học viên'
+})
+
+onMounted(async () => {
+  try {
+    const me = await fetchMe()
+    meEmail.value = me.email
+  } catch {
+    meEmail.value = null
+  }
+})
+
+const menuItems = computed(() => {
+  if (!isAuthenticated.value) {
+    return [
+      { type: 'link' as const, title: 'Đăng nhập', to: '/login', icon: 'lucide:log-in' },
+      { type: 'link' as const, title: 'Đăng ký', to: '/register', icon: 'lucide:user-plus' },
+    ]
+  }
+  return [
+    { type: 'link' as const, title: 'Hồ sơ', to: '/profile', icon: 'lucide:user' },
+    { type: 'link' as const, title: 'Cài đặt', to: '/setting', icon: 'lucide:settings' },
+    { type: 'divider' as const },
+    { type: 'action' as const, title: 'Đăng xuất', icon: 'lucide:log-out' },
+  ]
+})
+
+const signOut = async () => {
+  await clearSession()
+  meEmail.value = null
+  await navigateTo('/login')
+}
 </script>
 
 <template>
   <div class="flex items-center">
     <HeadlessPopover v-slot="{ open }" class="relative">
-      <HeadlessPopoverButton
-        class="flex items-center space-x-2 focus:outline-none"
-      >
+      <HeadlessPopoverButton class="flex items-center space-x-2 focus:outline-none">
         <div class="flex items-center">
-          <Icon
-            :name="user.avatar"
-            class="h-8 w-8 text-gray-600 dark:text-gray-400 rounded-full"
-          />
-          <span
-            class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300 hidden md:inline"
+          <div
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-500/15 text-xs font-black text-primary-600 dark:text-primary-400"
           >
-            {{ user.name }}
+            {{ displayName.slice(0, 1).toUpperCase() }}
+          </div>
+          <span class="ml-2 hidden text-sm font-medium text-gray-700 dark:text-gray-300 md:inline">
+            {{ displayName }}
           </span>
           <Icon
             name="carbon:chevron-down"
@@ -67,10 +73,10 @@ const menuItems = [
         >
           <div class="px-4 py-3">
             <p class="text-sm font-medium text-gray-900 dark:text-white">
-              {{ user.name }}
+              {{ displayName }}
             </p>
             <p class="truncate text-sm text-gray-500 dark:text-gray-400">
-              {{ user.email }}
+              {{ meEmail || 'Chưa đăng nhập' }}
             </p>
           </div>
 
@@ -78,7 +84,7 @@ const menuItems = [
             <template v-for="(item, index) in menuItems" :key="index">
               <div
                 v-if="item.type === 'divider'"
-                class="border-t border-gray-200 dark:border-gray-700 my-1"
+                class="my-1 border-t border-gray-200 dark:border-gray-700"
               />
 
               <NuxtLink
@@ -87,11 +93,24 @@ const menuItems = [
                 class="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 <Icon
-                  :name="item.icon || 'mdi:account'"
+                  :name="item.icon || 'lucide:user'"
                   class="mr-3 h-5 w-5 text-gray-500 group-hover:text-gray-600 dark:text-gray-400 dark:group-hover:text-gray-300"
                 />
                 {{ item.title }}
               </NuxtLink>
+
+              <button
+                v-else-if="item.type === 'action'"
+                type="button"
+                class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                @click="signOut"
+              >
+                <Icon
+                  :name="item.icon || 'lucide:log-out'"
+                  class="mr-3 h-5 w-5 text-gray-500 group-hover:text-gray-600 dark:text-gray-400 dark:group-hover:text-gray-300"
+                />
+                {{ item.title }}
+              </button>
             </template>
           </div>
         </HeadlessPopoverPanel>

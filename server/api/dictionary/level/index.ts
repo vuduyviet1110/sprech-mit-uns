@@ -1,11 +1,10 @@
-// import { PrismaClient } from '@prisma/client'
-// import { defineEventHandler, readBody, getQuery, getRouterParam } from 'h3'
+import { createError } from 'h3'
 
-// const prisma = new PrismaClient()
-
-// export default defineEventHandler(async (event) => {
-//     const method = event.node.req.method
-
-//     if (method === 'GET') {
-//         return await prisma.
-//     }
+/** Dead route — dictionary filters by topic/language via /api/dictionary instead. */
+export default defineEventHandler(() => {
+  throw createError({
+    statusCode: 410,
+    statusMessage:
+      'Endpoint /api/dictionary/level đã ngừng. Dùng /api/dictionary hoặc /api/dictionary/topic.',
+  })
+})

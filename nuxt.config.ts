@@ -14,8 +14,9 @@ export default defineNuxtConfig({
   },
 
   app: {
-    pageTransition: { name: 'page', mode: 'out-in' },
-    layoutTransition: { name: 'layout', mode: 'out-in' },
+    // Avoid hydration insertBefore crashes on first paint (esp. Docker/prod)
+    pageTransition: false,
+    layoutTransition: false,
   },
 
   compatibilityDate: '2026-09-08',
@@ -26,6 +27,16 @@ export default defineNuxtConfig({
     '@nuxtjs/color-mode',
     '@pinia/nuxt',
     '@vueuse/nuxt',
+    '@vueuse/motion/nuxt',
+    // Drop the module's built-in plugin — we register MotionPlugin ourselves
+    // in plugins/motion.ts for reliable SSR directive resolution.
+    (_opts, nuxt) => {
+      nuxt.options.plugins = nuxt.options.plugins.filter((plugin) => {
+        if (typeof plugin === 'string') return true
+        const src = plugin.src || ''
+        return !src.includes('@vueuse/motion/dist/nuxt/runtime/templates/motion')
+      })
+    },
     '@nuxt/content',
     'shadcn-nuxt',
   ],
@@ -63,6 +74,9 @@ export default defineNuxtConfig({
 
   colorMode: {
     classSuffix: '',
+    preference: 'system',
+    fallback: 'light',
+    storageKey: 'nuxt-color-mode',
   },
 
   content: {

@@ -1,0 +1,8 @@
+{
+  "buildPath": "code",
+  "detector": {
+    "ignoreValues": [
+      { "rule": "overused-font", "value": "Nunito", "reason": "Brand font" }
+    ]
+  }
+}

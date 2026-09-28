@@ -1,100 +1,100 @@
 export const features = [
   {
     icon: 'ph:book-open',
-    title: 'Bilingual Lessons',
+    title: 'Bài học song ngữ',
     description:
-      'Structured lessons with English ↔ word content, audio pronunciation, and visual aids.',
-    color: 'text-blue-600 bg-blue-50/50',
+      'Bài học có cấu trúc Anh ↔ Đức/Séc, phát âm audio và hỗ trợ hình ảnh.',
+    color: 'text-primary-600 bg-primary-50/60',
   },
   {
     icon: 'mdi:brain',
-    title: 'Spaced Repetition',
+    title: 'Lặp lại ngắt quãng',
     description:
-      'Smart flashcard system that adapts to your learning pace for optimal retention.',
-    color: 'text-purple-600 bg-purple-50/50',
+      'Hệ thống flashcard thông minh thích ứng tốc độ học để tối ưu ghi nhớ.',
+    color: 'text-blue-600 bg-blue-50/50',
   },
   {
     icon: 'lucide:message-square',
-    title: 'Interactive Dialogues',
+    title: 'Hội thoại tương tác',
     description:
-      'Practice real conversations with branching dialogue trees and feedback.',
-    color: 'text-green-600 bg-green-50/50',
+      'Luyện hội thoại thực tế với cây hội thoại phân nhánh (kịch bản A1–A2 DE/CS).',
+    color: 'text-primary-700 bg-primary-50/50',
   },
   {
     icon: 'mdi:dictionary',
-    title: 'Built-in Dictionary',
+    title: 'Từ điển tích hợp',
     description:
-      'Comprehensive EN ↔ DE dictionary with IPA, examples, and personal bookmarks.',
-    color: 'text-orange-600 bg-orange-50/50',
+      'Từ điển DE/CS ↔ VI theo chủ đề, IPA/ví dụ và sổ từ cá nhân.',
+    color: 'text-blue-700 bg-blue-50/50',
   },
   {
     icon: 'mdi:progress-check',
-    title: 'Level-Based Learning',
+    title: 'Học theo cấp độ',
     description:
-      'Structured progression from A1 to B2 with clear milestones and assessments.',
+      'Lộ trình A1–B1 có mở khóa theo tiến độ (≥70% bài trước).',
     color: 'text-red-600 bg-red-50/50',
   },
   {
     icon: 'mdi:trophy',
     title: 'Gamification',
     description:
-      'Earn points, unlock achievements, and compete with friends on leaderboards.',
-    color: 'text-yellow-600 bg-yellow-50/50',
+      'Kiếm điểm, mở thành tựu và thi đấu với bạn bè trên bảng xếp hạng.',
+    color: 'text-amber-600 bg-amber-50/50',
   },
   {
     icon: 'mdi:note',
-    title: 'Personal Notes',
+    title: 'Ghi chú cá nhân',
     description:
-      'Highlight difficult words, add personal notes, and create custom study sets.',
-    color: 'text-indigo-600 bg-indigo-50/50',
+      'Highlight từ khó, thêm ghi chú và tạo bộ ôn tập riêng.',
+    color: 'text-primary-600 bg-primary-50/40',
   },
   {
     icon: 'mdi:lightbulb',
-    title: 'Smart Roadmap',
+    title: 'Lộ trình thông minh',
     description:
-      'AI-powered daily suggestions and personalized learning path recommendations.',
-    color: 'text-pink-600 bg-pink-50/50',
+      'Gợi ý hàng ngày và lộ trình học cá nhân hóa theo tiến độ của bạn.',
+    color: 'text-blue-600 bg-blue-50/40',
   },
   {
     icon: 'mdi:globe',
-    title: 'Topic-Based Learning',
+    title: 'Học theo chủ đề',
     description:
-      'Learn word for specific contexts: travel, business, interviews, and more.',
-    color: 'text-teal-600 bg-teal-50/50',
+      'Từ vựng theo ngữ cảnh: du lịch, công việc, phỏng vấn và hơn thế nữa.',
+    color: 'text-primary-700 bg-primary-50/50',
   },
 ]
 export const levels = [
   {
     code: 'A1',
     title: 'Beginner',
-    description: 'Basic phrases and everyday expressions',
-    textColor: 'text-green-700',
+    description: 'Cụm từ cơ bản và biểu đạt hàng ngày',
+    textColor: 'text-primary-700',
     features: [
-      'Greetings & introductions',
-      'Numbers & time',
-      'Basic vocabulary',
+      'Chào hỏi & giới thiệu',
+      'Số đếm & thời gian',
+      'Từ vựng cơ bản',
     ],
   },
   {
     code: 'A2',
     title: 'Elementary',
-    description: 'Simple conversations and familiar topics',
+    description: 'Hội thoại đơn giản về chủ đề quen thuộc',
     textColor: 'text-blue-700',
-    features: ['Past tense basics', 'Shopping & dining', 'Family & hobbies'],
+    features: ['Quá khứ cơ bản', 'Mua sắm & ăn uống', 'Gia đình & sở thích'],
   },
   {
     code: 'B1',
     title: 'Intermediate',
-    description: 'Clear standard language on familiar matters',
-    textColor: 'text-purple-700',
-    features: ['Work & studies', 'Travel situations', 'Express opinions'],
+    description: 'Ngôn ngữ chuẩn về các chủ đề quen thuộc',
+    textColor: 'text-amber-700',
+    features: ['Công việc & học tập', 'Tình huống du lịch', 'Bày tỏ ý kiến'],
   },
   {
     code: 'B2',
     title: 'Upper Intermediate',
-    description: 'Complex texts and abstract topics',
-    textColor: 'text-orange-700',
-    features: ['Professional word', 'Complex grammar', 'Fluent discussions'],
+    description: 'Văn bản phức tạp và chủ đề trừu tượng',
+    textColor: 'text-red-700',
+    features: ['Từ vựng chuyên môn', 'Ngữ pháp nâng cao', 'Thảo luận lưu loát'],
   },
 ]
 

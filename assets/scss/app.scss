@@ -13,6 +13,55 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  /* Shared page shell — anti narrow max-w-7xl gutters */
+  .smu-page {
+    @apply w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10;
+  }
+
+  .smu-surface {
+    @apply bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl;
+  }
+
+  .smu-btn {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-extrabold rounded-xl shadow-sm transition-all duration-200 cursor-pointer text-base;
+  }
+
+  .smu-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold rounded-xl active:scale-95 transition-all duration-200 cursor-pointer text-sm;
+  }
+
+  .smu-label {
+    @apply block text-sm font-extrabold uppercase tracking-wider text-slate-500;
+  }
+
+  /* Hero enter on mount — springier feel */
+  .landing-enter {
+    animation: smu-landing-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes smu-landing-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--landing-enter-y, 28px), 0) scale(0.98);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, calc(var(--landing-enter-y, 28px) * -0.08), 0) scale(1.01);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-enter {
+    animation: none !important;
+  }
+}
 ::-webkit-scrollbar {
   width: 16px;
 }

@@ -102,8 +102,8 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div class="space-y-6 text-center max-w-xl mx-auto relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-8 rounded-2xl border border-slate-200/60 dark:border-slate-800 shadow-sm transition-colors">
-    <p class="text-xl font-bold text-slate-800 dark:text-slate-100">
+  <div class="space-y-6 text-center max-w-xl mx-auto relative p-4 transition-colors">
+    <p class="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">
       <span v-html="fullSentence" />
     </p>
 
@@ -111,14 +111,14 @@ const handleSubmit = () => {
       <div
         v-for="(word, i) in filledWords"
         :key="i"
-        class="border border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-slate-800/80 px-4 py-2 rounded-xl min-w-[110px] cursor-pointer shadow-xs transition-colors"
+        class="border-2 border-primary-500/50 bg-primary-50/50 dark:bg-slate-800/80 px-4 py-2.5 rounded-xl min-w-[120px] cursor-pointer shadow-sm transition-all hover:border-primary-500"
         @drop="handleDrop($event, i)"
         @dragover="handleDragOver"
         @click="handleRemove(i)"
       >
         <input
           v-model="filledWords[i]"
-          class="w-full text-center bg-transparent outline-none font-bold text-blue-900 dark:text-blue-300"
+          class="w-full text-center bg-transparent outline-none font-bold text-primary-900 dark:text-primary-300 text-lg"
           placeholder="___"
           @input="handleInput(i, $event.target?.value || '')"
         />
@@ -129,7 +129,7 @@ const handleSubmit = () => {
       <button
         v-for="(word, i) in options"
         :key="i"
-        class="bg-blue-100 dark:bg-slate-800 text-blue-900 dark:text-blue-300 border border-blue-200 dark:border-slate-700 px-4 py-2.5 rounded-xl font-semibold shadow-xs disabled:opacity-30 hover:bg-blue-200 dark:hover:bg-slate-700 transition-colors"
+        class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-5 py-2.5 rounded-xl font-bold shadow-xs disabled:opacity-30 hover:bg-primary-50 hover:border-primary-400 dark:hover:bg-slate-700 transition-all cursor-pointer"
         draggable="true"
         :disabled="selectedOptions.includes(word)"
         @click="handleSelect(word)"
@@ -141,19 +141,19 @@ const handleSubmit = () => {
 
     <div class="mt-6">
       <button
-        class="bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-bold px-8 py-3 rounded-xl disabled:opacity-40 shadow-md transition-all"
+        class="bg-primary-600 hover:bg-primary-500 dark:bg-primary-500 dark:hover:bg-primary-400 text-white font-bold px-8 py-3 rounded-xl disabled:opacity-40 shadow-lg shadow-primary-600/20 transition-all cursor-pointer"
         :disabled="!isComplete"
         @click="handleSubmit"
       >
-        Submit
+        Kểm tra đáp án (Submit)
       </button>
     </div>
 
-    <div v-if="showCelebration && isCorrect" class="absolute inset-0">
+    <div v-if="showCelebration && isCorrect" class="absolute inset-0 pointer-events-none">
       <LayoutPageLottieCelebration :show="showCelebration" />
     </div>
 
-    <div v-if="showCelebration && !isCorrect" class="absolute inset-0">
+    <div v-if="showCelebration && !isCorrect" class="absolute inset-0 pointer-events-none">
       <LayoutPageLottieIncorrect :show="showCelebration" />
     </div>
   </div>
@@ -161,7 +161,7 @@ const handleSubmit = () => {
 
 <style scoped>
 input::placeholder {
-  color: #a0aec0;
+  color: #94a3b8;
   opacity: 1;
 }
 </style>

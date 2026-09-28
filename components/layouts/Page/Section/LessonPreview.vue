@@ -65,7 +65,7 @@ const steps = ['Vocabulary', 'Sentences', 'Practice']
         <div
           v-for="(word, index) in sampleLesson.vocabulary"
           :key="index"
-          class="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-slate-800/90 dark:to-slate-800/50 p-6 rounded-xl border border-blue-100 dark:border-slate-700/70"
+          class="bg-blue-50/80 dark:bg-slate-800/80 p-6 rounded-xl border border-blue-100 dark:border-slate-700/70"
         >
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-4">
@@ -119,24 +119,24 @@ const steps = ['Vocabulary', 'Sentences', 'Practice']
       <div v-if="currentStep === 2" class="text-center space-y-6">
         <h3 class="text-xl font-bold text-slate-900 dark:text-white">Quick Practice</h3>
         <div
-          class="bg-gradient-to-r from-purple-50/80 to-pink-50/80 dark:from-slate-800/90 dark:to-purple-950/40 p-8 rounded-xl border border-purple-100 dark:border-purple-800/60"
+          class="bg-primary-50/80 dark:bg-primary-950/30 p-8 rounded-xl border border-primary-100 dark:border-primary-800/60"
         >
           <p class="text-lg text-slate-800 dark:text-slate-200 mb-4 font-medium">
             How do you say "Menu" in German?
           </p>
           <button
             v-if="!showTranslation"
-            class="bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors shadow-sm"
+            class="smu-btn"
             @click="showTranslation = true"
           >
             Show Answer
           </button>
           <div v-else class="space-y-4">
-            <div class="text-2xl font-extrabold text-purple-900 dark:text-purple-300">
+            <div class="text-2xl font-extrabold text-primary-800 dark:text-primary-300">
               Die Speisekarte
             </div>
             <button
-              class="border border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-slate-800 dark:text-slate-200 px-4 py-2 rounded-xl flex items-center justify-center gap-2 mx-auto text-sm font-medium transition-colors"
+              class="smu-btn-ghost mx-auto text-sm"
               @click="showTranslation = false"
             >
               ↻ Try Again

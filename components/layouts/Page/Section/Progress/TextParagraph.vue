@@ -34,7 +34,7 @@
 
     <CardContent class="space-y-6">
       <div
-        class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-100"
+        class="bg-blue-50/80 dark:bg-slate-800/80 p-6 rounded-2xl border border-blue-100 dark:border-slate-700"
       >
         <h3 class="text-lg font-semibold text-blue-900 mb-4">German Text</h3>
         <p class="text-lg leading-relaxed text-gray-800 font-medium">

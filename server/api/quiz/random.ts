@@ -1,9 +1,29 @@
 import { prisma } from '~/server/ultis/prisma'
 
+const SUPPORTED_TYPES = new Set([
+  'multiple_choice',
+  'sentence_builder',
+  'dictation',
+  'typed_recall',
+  'cloze',
+])
+
 export default defineEventHandler(async (event) => {
   try {
+    const query = getQuery(event)
+    const rawTypes = typeof query.types === 'string' ? query.types : ''
+    const requestedTypes = rawTypes
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => SUPPORTED_TYPES.has(t))
+
+    const take = Math.min(Math.max(Number(query.limit) || 30, 1), 50)
+
     const questions = await prisma.quizQuestion.findMany({
-      take: 30,
+      take,
+      where: requestedTypes.length
+        ? { type: { in: requestedTypes } }
+        : undefined,
       include: {
         choices: true,
       },

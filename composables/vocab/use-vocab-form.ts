@@ -1,20 +1,18 @@
 import { useVocabulary } from './use-vocabulary'
-import type { VocabularyWord } from '~/utils/types'
+import type { UserVocabularyEntry } from '~/utils/types'
 
 export function useVocabularyForm() {
-  const form = ref<VocabularyWord>({
+  const form = ref({
     id: '',
     word: '',
     meaning: '',
     example: '',
     level: 'A1',
-    audioUrl: '',
-    imageUrl: '',
-    type: 'noun',
-    transcription: '',
-    synonyms: [],
-    antonyms: [],
-    topics: [],
+    type: 'Noun',
+    note: '',
+    language: 'de',
+    source: 'manual' as string,
+    wordId: null as string | null,
   })
 
   const viMeaning = ref('')
@@ -25,7 +23,8 @@ export function useVocabularyForm() {
   const errorMessage = ref('')
   const isLoading = ref(false)
 
-  const { fetchVocabularies, selectedLevel } = useVocabulary()
+  const { fetchVocabularies, userId } = useVocabulary()
+  const { currentLanguage } = useLanguage()
 
   const resetForm = () => {
     form.value = {
@@ -34,13 +33,11 @@ export function useVocabularyForm() {
       meaning: '',
       example: '',
       level: 'A1',
-      audioUrl: '',
-      imageUrl: '',
-      type: 'noun',
-      transcription: '',
-      synonyms: [],
-      antonyms: [],
-      topics: [],
+      type: 'Noun',
+      note: '',
+      language: currentLanguage.value || 'de',
+      source: 'manual',
+      wordId: null,
     }
     viMeaning.value = ''
     enMeaning.value = ''
@@ -65,70 +62,104 @@ export function useVocabularyForm() {
     isFormOpen.value = false
   }
 
-  const { currentLanguage } = useLanguage()
-
-  const saveVocabulary = async () => {
-    // Combine viMeaning & enMeaning into standard meaning format: "VN <vi> • GB <en>" or single meaning
+  const buildMeaning = () => {
     if (viMeaning.value.trim() || enMeaning.value.trim()) {
       const parts: string[] = []
-      if (viMeaning.value.trim()) {
-        parts.push(`VN ${viMeaning.value.trim()}`)
-      }
-      if (enMeaning.value.trim()) {
-        parts.push(`GB ${enMeaning.value.trim()}`)
-      }
+      if (viMeaning.value.trim()) parts.push(`VN ${viMeaning.value.trim()}`)
+      if (enMeaning.value.trim()) parts.push(`GB ${enMeaning.value.trim()}`)
       form.value.meaning = parts.join(' • ')
     }
+  }
 
-    const topicIds = (form.value.topics || []).map((t: any) =>
-      typeof t === 'string' ? t : t?.topicId || t?.id,
-    ).filter(Boolean)
-
-    const payload = {
-      ...form.value,
-      language: form.value.language || currentLanguage.value,
-      wordType: form.value.type,
-      topicIds,
+  const saveVocabulary = async () => {
+    buildMeaning()
+    if (!form.value.word.trim() || !form.value.meaning.trim()) {
+      errorMessage.value = 'Vui lòng nhập từ và nghĩa'
+      return
     }
 
-    const url = editing.value
-      ? `/api/vocabulary/${form.value.id}`
-      : '/api/vocabulary'
-    const method = editing.value ? 'PUT' : 'POST'
+    const isDictionaryEdit =
+      editing.value && form.value.source === 'dictionary' && !!form.value.wordId
 
     isLoading.value = true
     try {
-      await $fetch(url, { method, body: payload })
+      if (editing.value) {
+        await $fetch(`/api/vocabulary/${form.value.id}`, {
+          method: 'PUT',
+          query: { userId },
+          body: isDictionaryEdit
+            ? { note: form.value.note, meaning: form.value.meaning }
+            : {
+                word: form.value.word,
+                meaning: form.value.meaning,
+                note: form.value.note,
+                language: form.value.language,
+                level: form.value.level,
+                type: form.value.type,
+                example: form.value.example,
+              },
+        })
+      } else {
+        await $fetch('/api/vocabulary', {
+          method: 'POST',
+          body: {
+            userId,
+            word: form.value.word,
+            meaning: form.value.meaning,
+            note: form.value.note,
+            language: form.value.language || currentLanguage.value,
+            level: form.value.level,
+            type: form.value.type,
+            example: form.value.example,
+            source: 'manual',
+          },
+        })
+      }
+
       resetForm()
       editing.value = false
       isFormOpen.value = false
       errorMessage.value = ''
       await fetchVocabularies(true)
     } catch (error) {
-      errorMessage.value = 'Lỗi khi lưu từ vựng'
+      errorMessage.value = 'Lỗi khi lưu vào sổ từ vựng'
       console.error(error)
     } finally {
       isLoading.value = false
     }
   }
 
-  const editVocabulary = (vocab: VocabularyWord) => {
+  const editVocabulary = (entry: UserVocabularyEntry) => {
     editing.value = true
     form.value = {
-      ...vocab,
-      topics: vocab.topics?.map((t: any) =>
-        typeof t === 'string' ? t : t.topicId || t.topic?.id || t.id,
-      ) || [],
+      id: entry.id,
+      word: entry.word,
+      meaning: entry.meaning,
+      example: entry.example || '',
+      level: entry.level || 'A1',
+      type: entry.type || 'Noun',
+      note: entry.note || '',
+      language: entry.language || 'de',
+      source: entry.source || 'manual',
+      wordId: entry.wordId || null,
     }
 
-    // Extract VN and GB meaning parts from vocab.meaning string
-    if (vocab.meaning) {
-      if (vocab.meaning.includes('•')) {
-        const parts = vocab.meaning.split('•')
-        viMeaning.value = parts[0].replace(/VN\s*/i, '').replace(/🇻🇳/g, '').trim()
-        enMeaning.value = parts[1].replace(/GB\s*/i, '').replace(/🇬🇧/g, '').trim()
+    if (entry.meaning) {
+      if (entry.meaning.includes('•')) {
+        const parts = entry.meaning.split('•')
+        viMeaning.value = parts[0]
+          .replace(/VN\s*/i, '')
+          .replace(/🇻🇳/g, '')
+          .trim()
+        enMeaning.value = parts[1]
+          .replace(/GB\s*/i, '')
+          .replace(/🇬🇧/g, '')
+          .trim()
       } else {
-        viMeaning.value = vocab.meaning.replace(/VN\s*/i, '').replace(/🇻🇳/g, '').trim()
+        viMeaning.value = entry.meaning
+          .replace(/VN\s*/i, '')
+          .replace(/🇻🇳/g, '')
+          .trim()
         enMeaning.value = ''
       }
     } else {

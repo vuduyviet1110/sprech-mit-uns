@@ -1,12 +1,11 @@
-// Get api from db
-
 import type { UserWordProgress } from './types'
+import { qualityFromBinaryClient } from './srs-quality'
 
 const PROGRESS_KEY = 'german_learning_progress'
 
-// Get all user progress
 const getAllProgress = (): Record<string, UserWordProgress> => {
   try {
+    if (typeof localStorage === 'undefined') return {}
     const stored = localStorage.getItem(PROGRESS_KEY)
     return stored ? JSON.parse(stored) : {}
   } catch (error) {
@@ -15,36 +14,27 @@ const getAllProgress = (): Record<string, UserWordProgress> => {
   }
 }
 
-// Save all progress to localStorage
 const saveAllProgress = (progress: Record<string, UserWordProgress>) => {
   try {
+    if (typeof localStorage === 'undefined') return
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
   } catch (error) {
     console.error('Error saving progress:', error)
   }
 }
 
-// Get progress for a specific word
-export function getWordProgress(userId: string, wordId: string) {
-  const fake = {
-    correctCount: Math.floor(Math.random() * 5),
-    incorrectCount: Math.floor(Math.random() * 3),
-    streak: Math.floor(Math.random() * 4),
-    masteryLevel: Math.floor(Math.random() * 6),
-    isMastered: Math.random() > 0.8,
-    lastCorrect: Math.random() > 0.5,
-    nextReviewAt: new Date(),
-    lastReviewedAt: new Date(),
-  }
-  return fake
+export function getWordProgress(userId: string, wordId: string): UserWordProgress | null {
+  const allProgress = getAllProgress()
+  const key = `${userId}-${wordId}`
+  return allProgress[key] || null
 }
 
-// Update progress for a specific word
+/** Sync progress via SM-2 API (session cookie); localStorage is optimistic cache only. */
 export const updateWordProgress = (
   userId: string,
   wordId: string,
-  progress: Partial<UserWordProgress>,
-): any => {
+  progress: Partial<UserWordProgress> & { quality?: number },
+): void => {
   const allProgress = getAllProgress()
   const key = `${userId}-${wordId}`
 
@@ -67,9 +57,26 @@ export const updateWordProgress = (
   }
 
   saveAllProgress(allProgress)
+
+  if (typeof window !== 'undefined') {
+    const quality =
+      progress.quality !== undefined
+        ? progress.quality
+        : qualityFromBinaryClient(progress.lastCorrect ?? false)
+
+    $fetch('/api/progress/word', {
+      method: 'POST',
+      body: {
+        wordId,
+        quality,
+        isCorrect: progress.lastCorrect ?? false,
+      },
+    }).catch((err) => {
+      console.warn('Could not sync progress to DB:', err)
+    })
+  }
 }
 
-// Get all words that need review
 export const getWordsForReview = (userId: string): any => {
   const allProgress = getAllProgress()
   const now = new Date()
@@ -93,7 +100,6 @@ export const getWordsForReview = (userId: string): any => {
     }))
 }
 
-// Get user statistics
 export const getUserStats = (userId: string) => {
   const allProgress = getAllProgress()
   const userProgress = Object.values(allProgress).filter(
@@ -124,15 +130,4 @@ export const getUserStats = (userId: string) => {
     averageCorrectRate: Math.round(averageCorrectRate * 100),
     longestStreak,
   }
-}
-
-// Calculate next review date based on spaced repetition
-export const calculateNextReview = (
-  masteryLevel: number,
-  wasCorrect: boolean,
-): Date => {
-  const baseInterval = wasCorrect ? Math.pow(2, masteryLevel) : 1 // 1, 2, 4, 8, 16, 32 days
-  const intervalHours = baseInterval * 24
-
-  return new Date(Date.now() + intervalHours * 60 * 60 * 1000)
 }

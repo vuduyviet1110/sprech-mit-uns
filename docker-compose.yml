@@ -32,8 +32,26 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
+      - NUXT_SESSION_PASSWORD=${NUXT_SESSION_PASSWORD:?set NUXT_SESSION_PASSWORD in .env}
+      - NUXT_PUBLIC_SENTRY_DSN=${NUXT_PUBLIC_SENTRY_DSN:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - NUXT_PUBLIC_SENTRY_ENVIRONMENT=${NUXT_PUBLIC_SENTRY_ENVIRONMENT:-production}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      - SMU_TTS_PROVIDER=${SMU_TTS_PROVIDER:-google}
+      - NUXT_PUBLIC_TTS_MODE=${NUXT_PUBLIC_TTS_MODE:-auto}
+      - SMU_ALLOW_DEMO=${SMU_ALLOW_DEMO:-}
+      - SMU_SEED_DEMO=${SMU_SEED_DEMO:-}
+      - NUXT_PUBLIC_SHOW_DEMO=${NUXT_PUBLIC_SHOW_DEMO:-}
+      - SMU_ALLOW_CATALOG_WRITES=${SMU_ALLOW_CATALOG_WRITES:-}
+      - SMU_ADMIN_EMAILS=${SMU_ADMIN_EMAILS:-}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sprech_mit_uns}?schema=public
       - DIRECT_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sprech_mit_uns}?schema=public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/auth/me || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       db:
         condition: service_healthy

@@ -1,43 +1,63 @@
-# Sprech Mit Uns - Nền Tảng Học Tiếng Đức Trực Tuyến & Hỗ Trợ Tiếng Séc
+# Sprech Mit Uns — Học tiếng Đức & tiếng Séc
 
-> **Sprech Mit Uns** là ứng dụng web học ngoại ngữ thông minh tích hợp từ điển song ngữ (Đức - Séc) quy mô lớn chuẩn 100% từ vựng thực tế (**2,376+ từ tiếng Séc thông dụng hỗ trợ dịch song ngữ Tiếng Việt & Tiếng Anh 🇬🇧 & 200+ từ tiếng Đức**), ôn tập Spaced Repetition (SRS Flashcards), luyện gõ chính tả YouTube Dictation, cào tin tức báo tiếng Đức và hệ thống trắc nghiệm ngữ cảnh.
+Ứng dụng web học ngoại ngữ cho người Việt: bài học theo chủ đề A1–B1 (Đức + Séc), SRS SM-2, shadowing, dictation YouTube, đọc báo và quiz.
 
----
+## Nội dung seed (MVP)
 
-## 🚀 Các Tính Năng Nổi Bật (Features Summary)
+Sau khi chạy seed, catalog đếm từ database (không hardcode marketing):
 
-- 📖 **Từ Điển Tiếng Séc Đa Ngữ (2,376+ Từ Thật Dịch Tiếng Việt & Tiếng Anh 🇬🇧)**: Tra cứu từ điển tiếng Séc chuẩn từ vựng thực tế hỗ trợ song ngữ Tiếng Việt & Tiếng Anh (Danh từ, Động từ, Tính từ, Số đếm, Số thứ tự, Phân số) và tiếng Đức.
-- 🧠 **Thuật Toán Spaced Repetition (SRS SuperMemo-2)**: Hệ thống Flashcard tự động tính toán lịch ôn tập ngắt quãng cá nhân hóa giúp nhớ từ lâu.
-- 🎬 **Luyện Gõ Chính Tả YouTube (YouTube Dictation)**: Tự động bóc tách phụ đề tiếng Đức từ video YouTube, phát từng câu để người học chép chính tả và tự kiểm tra.
-- 📰 **Báo Tiếng Đức & Scraper Tin Tức**: Cào báo tiếng Đức (Tagesschau, DW), phân tích cấp độ từ vựng và hỗ trợ đọc báo với giọng đọc Text-to-Speech.
-- 🎯 **Interactive Quiz Suite**: Hệ thống bài tập 3 dạng: Trắc nghiệm (Multiple Choice), Sắp xếp câu (Sentence Builder) và Nghe gõ chính tả (Dictation) kèm hiệu ứng Confetti.
-- 📊 **Thống Kê Tiến Trình (Progress Analytics)**: Theo dõi số từ đã học, từ đã thành thạo, chuỗi Streak học liên tục và phân bổ theo trình độ.
-- 🌙 **Giao Diện Đỉnh Cao (Impeccable Design)**: Hỗ trợ Chế độ Sáng / Tối (Dark / Light Mode) với font Nunito và hiệu ứng micro-animations mượt mà.
+- **12 chủ đề DE A1–B1** (+ vài topic cũ nếu DB đã có) và **12 chủ đề CS A1–B1** có `sortOrder` / `prerequisiteSlug`
+- Seed thêm **~432 từ/ngôn ngữ**; catalog landing đếm số thật từ DB
+- Quiz tự generate ≥5 câu/chủ đề
+- User demo: `demo@sprech.local` / `demo123`
 
----
-
-## 🛠️ Hướng Dẫn Chạy Dự Án (Quick Start)
-
-### 1. Cài Đặt & Chạy Môi Trường Dev
+## Chạy local
 
 ```bash
-# 1. Cài đặt các gói phụ thuộc
 pnpm install
-
-# 2. Sinh Prisma Client & Đồng bộ Database PostgreSQL
+cp .env.example .env   # set NUXT_SESSION_PASSWORD (≥32 chars)
 npx prisma generate
-npx prisma db push
-
-# 3. Nạp dữ liệu bản dịch Tiếng Anh
-node prisma/update_czech_english_translations.mjs
-
-# 4. Chạy dự án ở môi trường Dev (Port 5134)
+npx prisma migrate deploy   # applies init + later migrations
+npx prisma db seed
 pnpm dev
 ```
 
----
+Nếu DB cũ đã `db push` / chỉ có migration streak trong `_prisma_migrations`, đánh dấu baseline rồi deploy:
 
-## 📑 Tài Liệu Hệ Thống
+```bash
+npx prisma migrate resolve --applied 20260917000000_init
+npx prisma migrate deploy
+```
 
-Chi tiết kiến trúc hệ thống và hướng dẫn phát triển được ghi nhận tại:
-👉 [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)
+App chạy tại `http://localhost:5134`.
+
+Đăng ký tài khoản mới, hoặc đăng nhập demo (chỉ khi không phải production / có `SMU_ALLOW_DEMO`). Các route học yêu cầu đăng nhập (session httpOnly).
+
+```bash
+pnpm test          # Vitest unit tests
+pnpm build && pnpm test:e2e   # Playwright smoke (cần DB đã seed + build)
+
+# Docker production (cần NUXT_SESSION_PASSWORD trong .env)
+pnpm docker:build      # build image trước
+pnpm docker:up         # chạy image đã build
+pnpm docker:up:build   # build + chạy một lệnh
+```
+
+## Tính năng chính
+
+- Lộ trình hôm nay (SRS → Shadowing → Active Recall) + bài tiếp theo theo curriculum
+- Lesson: flashcard → đoạn văn → practice (sai/đúng ghi vào SRS)
+- Từ điển / sổ từ vựng / ôn SRS (SM-2 duy nhất)
+- YouTube dictation, news scraper (DE/CS) — cần đăng nhập
+- Quiz solo; phòng nhóm là **demo** (tắt mặc định khi `NODE_ENV=production`)
+
+## TTS & Sentry
+
+- TTS mặc định: proxy Google (cache + retry) → fallback Web Speech. CI/local ổn định: `SMU_TTS_PROVIDER=off` và `NUXT_PUBLIC_TTS_MODE=browser`.
+- Sentry tùy chọn qua `NUXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` (scrub cookie & password).
+- Pháp lý: `/privacy`, `/terms` (link footer).
+
+## Tài liệu
+
+- [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)
+- [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)

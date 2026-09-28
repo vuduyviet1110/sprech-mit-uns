@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 const { awesome } = useAppConfig()
 
-const props = defineProps({
+defineProps({
   withAlert: {
     type: Boolean,
     default: true,
@@ -9,59 +9,63 @@ const props = defineProps({
 })
 
 const titlesText = computed<string[]>(() =>
-  (awesome?.layout?.welcome?.title || awesome?.name || 'Sprech&nbsp;3  Mit Uns')
+  (awesome?.layout?.welcome?.title || awesome?.name || 'Sprech Mit Uns')
     .replaceAll('&nbsp;', ' ')
     .split(' '),
 )
+
+/** Brand-aligned gradients: primary green + accent blue (project tokens) */
 const leadingsText = computed(() => [
   {
     text: titlesText.value[0],
-    startColor: '#007CF0',
-    endColor: '#00DFD8',
+    startColor: '#3BA676',
+    endColor: '#0096FF',
     delay: 0,
   },
   {
     text: titlesText.value[1],
-    startColor: '#7928CA',
-    endColor: '#FF0080',
+    startColor: '#2C7D59',
+    endColor: '#69CA9E',
     delay: 2,
   },
   {
     text: titlesText.value[2],
-    startColor: '#FF4D4D',
-    endColor: '#F9CB28',
+    startColor: '#0096FF',
+    endColor: '#3BA676',
     delay: 4,
   },
 ])
 </script>
 
 <template>
-  <LayoutPageWrapper class="flex-1 flex">
-    <LayoutPageSection>
-      <div class="flex-1 flex flex-col items-center justify-center">
-        <h1 class="text-center flex mt-4">
-          <span
-            v-for="(item, i) in leadingsText"
-            :key="i"
-            :style="`--content: '${item.text}'; --start-color: ${
-              item.startColor
-            }; --end-color: ${item.endColor}; --animation-name: anim-fg-${
-              i + 1
-            }`"
-            class="animated-text-bg drop-shadow-xl text-6xl sm:text-8xl md:text-8xl lg:text-8xl 2xl:text-8xl block font-black uppercase"
-          >
-            <span class="animated-text-fg">{{ item.text }}</span>
-          </span>
-        </h1>
-        <div class="px-4 mt-6 text-center max-w-[500px] md:max-w-[600px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
-          {{
-            awesome?.description ||
-            'a starter template for Nuxt 3 with minimalist themes design, built in components, drawer & menus, and more.'
-          }}
-        </div>
-      </div>
-    </LayoutPageSection>
-  </LayoutPageWrapper>
+  <div class="flex flex-col items-center justify-center w-full">
+    <h1
+      class="landing-enter text-center flex flex-row items-center justify-center flex-wrap gap-2 sm:gap-5"
+      style="--landing-enter-y: 32px"
+    >
+      <span
+        v-for="(item, i) in leadingsText"
+        :key="i"
+        :style="`--content: '${item.text}'; --start-color: ${
+          item.startColor
+        }; --end-color: ${item.endColor}; --animation-name: anim-fg-${
+          i + 1
+        }`"
+        class="animated-text-bg text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black uppercase tracking-tight"
+      >
+        <span class="animated-text-fg">{{ item.text }}</span>
+      </span>
+    </h1>
+    <p
+      class="landing-enter mt-5 text-center max-w-2xl text-slate-600 dark:text-slate-300 font-medium leading-relaxed text-base md:text-lg"
+      style="--landing-enter-y: 16px; animation-delay: 120ms"
+    >
+      {{
+        awesome?.description ||
+        'Nền tảng học tiếng Đức & tiếng Séc chủ động với flashcard, SRS và luyện phản xạ.'
+      }}
+    </p>
+  </div>
 </template>
 
 <style lang="scss">
@@ -105,14 +109,12 @@ const leadingsText = computed(() => [
 }
 .animated-text-bg {
   position: relative;
-  display: block;
+  display: inline-block;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
   content: var(--content);
-  display: block;
-  width: 100%;
   color: theme('colors.slate.800');
   top: 0;
   bottom: 0;
@@ -123,7 +125,7 @@ const leadingsText = computed(() => [
   &:before {
     content: var(--content);
     position: absolute;
-    display: block;
+    display: inline-block;
     width: 100%;
     color: theme('colors.slate.800');
     top: 0;

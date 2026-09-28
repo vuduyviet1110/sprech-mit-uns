@@ -1,18 +1,41 @@
 import { prisma } from '~/server/ultis/prisma'
 import { createError } from 'h3'
+import {
+  completionRatioFromProgress,
+  isWordDoneForUnlock,
+} from '~/server/utils/curriculum-progress'
 
-export async function getTopicsByLevel(userId: string) {
+const UNLOCK_RATIO = 0.7
+
+function completionRatio(
+  words: {
+    userProgress: {
+      repetitions?: number | null
+      isMastered?: boolean | null
+      masteryLevel?: number | null
+      lastReviewedAt?: Date | null
+    }[]
+  }[],
+) {
+  return completionRatioFromProgress(words)
+}
+
+export async function getTopicsByLevel(userId: string, language: string = 'de') {
   const topics = await prisma.topic.findMany({
+    where: { language },
     select: {
       id: true,
       name: true,
       slug: true,
       level: true,
+      language: true,
       description: true,
       paragraph: true,
       englishTranslation: true,
       difficulty: true,
       estimatedTime: true,
+      sortOrder: true,
+      prerequisiteSlug: true,
       words: {
         select: {
           word: {
@@ -25,6 +48,7 @@ export async function getTopicsByLevel(userId: string) {
                   isMastered: true,
                   masteryLevel: true,
                   lastReviewedAt: true,
+                  repetitions: true,
                 },
               },
             },
@@ -32,36 +56,59 @@ export async function getTopicsByLevel(userId: string) {
         },
       },
     },
-    orderBy: { level: 'asc' },
+    orderBy: [{ sortOrder: 'asc' }, { level: 'asc' }],
   })
+
+  const ratioBySlug = new Map<string, number>()
+  for (const topic of topics) {
+    const words = topic.words.map((wt) => wt.word).filter(Boolean) as any[]
+    ratioBySlug.set(topic.slug || '', completionRatio(words))
+  }
 
   const topicsData: Record<string, any> = {}
   for (const topic of topics) {
     const level = topic.level || 'Other'
-    if (!topicsData[level]) {
-      topicsData[level] = []
-    }
+    if (!topicsData[level]) topicsData[level] = []
 
     const wordsCount = topic.words.length
     const completedWords = topic.words.filter((wordTopic) =>
-      wordTopic.word?.userProgress.some((progress) => progress.lastReviewedAt),
+      wordTopic.word?.userProgress.some((progress) =>
+        isWordDoneForUnlock(progress),
+      ),
     ).length
     const masteredWords = topic.words.filter((wordTopic) =>
       wordTopic.word?.userProgress.some((progress) => progress.isMastered),
     ).length
 
+    let locked = false
+    let unlockHint: string | null = null
+    if (topic.prerequisiteSlug) {
+      const prereqRatio = ratioBySlug.get(topic.prerequisiteSlug) ?? 0
+      if (prereqRatio < UNLOCK_RATIO) {
+        locked = true
+        const prereq = topics.find((t) => t.slug === topic.prerequisiteSlug)
+        unlockHint = `Hoàn thành ≥${Math.round(UNLOCK_RATIO * 100)}% bài «${prereq?.name || topic.prerequisiteSlug}» để mở khóa`
+      }
+    }
+
     topicsData[level].push({
       id: topic.id,
-      slug: topic.slug, // Thêm slug
+      slug: topic.slug,
       title: topic.name,
+      language: topic.language,
       description: topic.description,
       paragraph: topic.paragraph,
       englishTranslation: topic.englishTranslation,
       difficulty: topic.difficulty,
       estimatedTime: topic.estimatedTime,
+      sortOrder: topic.sortOrder,
+      prerequisiteSlug: topic.prerequisiteSlug,
       wordsCount,
       completedWords,
       masteredWords,
+      locked,
+      unlockHint,
+      completionRatio: Math.round((ratioBySlug.get(topic.slug || '') || 0) * 100) / 100,
     })
   }
 
@@ -70,17 +117,19 @@ export async function getTopicsByLevel(userId: string) {
 
 export async function getTopicDetails(slug: string, userId: string) {
   const topic = await prisma.topic.findUnique({
-    where: { slug }, // Tìm theo slug
+    where: { slug },
     select: {
       id: true,
       name: true,
-      slug: true, // Thêm slug
+      slug: true,
       level: true,
+      language: true,
       description: true,
       paragraph: true,
       englishTranslation: true,
       difficulty: true,
       estimatedTime: true,
+      prerequisiteSlug: true,
       words: {
         select: {
           word: {
@@ -107,6 +156,7 @@ export async function getTopicDetails(slug: string, userId: string) {
                   lastReviewedAt: true,
                   nextReviewAt: true,
                   streak: true,
+                  repetitions: true,
                 },
               },
             },
@@ -120,9 +170,39 @@ export async function getTopicDetails(slug: string, userId: string) {
     throw createError({ statusCode: 404, message: 'Topic not found' })
   }
 
+  // Enforce unlock on lesson fetch
+  if (topic.prerequisiteSlug) {
+    const prereq = await prisma.topic.findUnique({
+      where: { slug: topic.prerequisiteSlug },
+      include: {
+        words: {
+          include: {
+            word: {
+              select: {
+                userProgress: {
+                  where: { userId },
+                  select: { lastReviewedAt: true, masteryLevel: true, repetitions: true, isMastered: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+    if (prereq) {
+      const words = prereq.words.map((w) => w.word).filter(Boolean) as any[]
+      if (completionRatio(words) < UNLOCK_RATIO) {
+        throw createError({
+          statusCode: 403,
+          message: `Hoàn thành ≥70% bài «${prereq.name}» trước khi học bài này`,
+        })
+      }
+    }
+  }
+
   const wordsCount = topic.words.length
   const completedWords = topic.words.filter((wordTopic) =>
-    wordTopic.word?.userProgress.some((progress) => progress.lastReviewedAt),
+    wordTopic.word?.userProgress.some((progress) => isWordDoneForUnlock(progress)),
   ).length
   const masteredWords = topic.words.filter((wordTopic) =>
     wordTopic.word?.userProgress.some((progress) => progress.isMastered),
@@ -130,9 +210,10 @@ export async function getTopicDetails(slug: string, userId: string) {
 
   return {
     id: topic.id,
-    slug: topic.slug, // Thêm slug
+    slug: topic.slug,
     title: topic.name,
-    language: (topic as any).language || 'de',
+    language: topic.language || 'de',
+    level: topic.level,
     description: topic.description,
     paragraph: topic.paragraph,
     englishTranslation: topic.englishTranslation,

@@ -1,60 +1,142 @@
 import { prisma } from '~/server/ultis/prisma'
 import { defineEventHandler, readBody, getQuery, createError, sendError } from 'h3'
+import { requireCatalogWriter } from '~/server/utils/catalog-write'
+
+const DEFAULT_LIMIT = 4
+const MAX_LIMIT = 12
+
+type WordSelect = {
+  id: true
+  word: true
+  type: true
+  pronunciation: true
+  meaning: true
+  example: true
+  audioUrl: true
+  level: true
+  language: true
+}
+
+const wordSelect: WordSelect = {
+  id: true,
+  word: true,
+  type: true,
+  pronunciation: true,
+  meaning: true,
+  example: true,
+  audioUrl: true,
+  level: true,
+  language: true,
+}
+
+function buildWordFilter(query: Record<string, unknown>) {
+  const search = typeof query.search === 'string' ? query.search.trim() : ''
+  const level = typeof query.level === 'string' ? query.level.trim() : ''
+  const type = typeof query.type === 'string' ? query.type.trim() : ''
+
+  const where: Record<string, unknown> = {}
+
+  if (level) {
+    where.level = { equals: level, mode: 'insensitive' }
+  }
+
+  if (type) {
+    if (type === 'Phrase') {
+      where.type = { in: ['Phrase', 'Interjection'] }
+    } else {
+      where.type = { equals: type, mode: 'insensitive' }
+    }
+  }
+
+  if (search) {
+    where.OR = [
+      { word: { contains: search, mode: 'insensitive' } },
+      { meaning: { contains: search, mode: 'insensitive' } },
+      { example: { contains: search, mode: 'insensitive' } },
+    ]
+  }
+
+  return Object.keys(where).length ? where : undefined
+}
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
 
   try {
-    // GET: Lấy tất cả topic (lọc theo ?lang=de hoặc ?lang=cs)
     if (method === 'GET') {
       const query = getQuery(event)
       const lang = query.lang as string
+      const pageNum = Math.max(1, Number(query.page) || 1)
+      const limitNum = Math.min(
+        MAX_LIMIT,
+        Math.max(1, Number(query.limit) || DEFAULT_LIMIT),
+      )
+      const skip = (pageNum - 1) * limitNum
+      const wordFilter = buildWordFilter(query as Record<string, unknown>)
 
-      const allTopics = await prisma.topic.findMany({
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          level: true,
-          description: true,
-          words: {
-            select: {
-              word: {
-                select: {
-                  id: true,
-                  word: true,
-                  type: true,
-                  pronunciation: true,
-                  meaning: true,
-                  example: true,
-                  audioUrl: true,
-                  level: true,
-                },
+      const langWhere =
+        lang === 'cs' || lang === 'de' ? { language: lang } : undefined
+
+      const topicWhere: Record<string, unknown> = {
+        ...(langWhere || {}),
+      }
+      if (wordFilter) {
+        topicWhere.words = {
+          some: {
+            word: wordFilter,
+          },
+        }
+      }
+
+      const [totalTopics, totalWords, topics] = await Promise.all([
+        prisma.topic.count({ where: topicWhere as any }),
+        prisma.vocabularyWord.count({
+          where: {
+            ...(langWhere || {}),
+            ...(wordFilter || {}),
+          } as any,
+        }),
+        prisma.topic.findMany({
+          where: topicWhere as any,
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            level: true,
+            language: true,
+            description: true,
+            words: {
+              where: wordFilter ? { word: wordFilter } : undefined,
+              select: {
+                word: { select: wordSelect },
               },
             },
           },
-        },
-        orderBy: {
-          name: 'asc',
-        },
-      })
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+          skip,
+          take: limitNum,
+        }),
+      ])
 
-      const formattedTopics = allTopics.map((t) => ({
+      const mapped = topics.map((t) => ({
         ...t,
         words: t.words.map((w) => w.word).filter(Boolean),
       }))
 
-      if (lang === 'cs') {
-        return formattedTopics.filter((t) => t.slug?.endsWith('-cs') || t.name.includes('(Tiếng Séc)'))
-      } else if (lang === 'de') {
-        return formattedTopics.filter((t) => !t.slug?.endsWith('-cs') && !t.name.includes('(Tiếng Séc)'))
+      return {
+        topics: mapped,
+        meta: {
+          page: pageNum,
+          limit: limitNum,
+          hasMore: skip + mapped.length < totalTopics,
+          totalTopics,
+          totalWords,
+        },
       }
-
-      return formattedTopics
     }
 
-    // POST: Tạo topic mới
     if (method === 'POST') {
+      await requireCatalogWriter(event)
       const body = await readBody(event)
       if (!body.name || typeof body.name !== 'string') {
         return sendError(
@@ -64,7 +146,13 @@ export default defineEventHandler(async (event) => {
       }
 
       const name = body.name.trim()
-      const slug = body.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') || `topic-${Date.now()}`
+      const slug =
+        body.slug ||
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '') ||
+        `topic-${Date.now()}`
 
       const created = await prisma.topic.upsert({
         where: { name },
@@ -83,8 +171,8 @@ export default defineEventHandler(async (event) => {
       return created
     }
 
-    // PUT: Cập nhật topic (yêu cầu query ?id=...)
     if (method === 'PUT') {
+      await requireCatalogWriter(event)
       const query = getQuery(event)
       const id = query.id as string
       const body = await readBody(event)
@@ -104,8 +192,8 @@ export default defineEventHandler(async (event) => {
       return updated
     }
 
-    // DELETE: Xoá topic (yêu cầu query ?id=...)
     if (method === 'DELETE') {
+      await requireCatalogWriter(event)
       const query = getQuery(event)
       const id = query.id as string
 

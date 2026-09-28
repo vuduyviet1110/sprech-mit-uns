@@ -1,47 +1,48 @@
-# Stage 1: Build stage
+# Stage 1: Build
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies if native packages needed
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl \
+  && corepack enable \
+  && corepack prepare pnpm@10.11.0 --activate
 
-# Copy package files
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci || npm install --legacy-peer-deps
+RUN pnpm install --frozen-lockfile
 
-# Copy source files
 COPY . .
 
-# Generate Prisma Client
-RUN npx prisma generate
+RUN pnpm exec prisma generate
 
-# Build Nuxt 3 application
 ENV NODE_ENV=production
-RUN npm run build && if [ -d "app/.output" ]; then mv app/.output ./.output; fi
+RUN pnpm build && if [ -d "app/.output" ]; then mv app/.output ./.output; fi
 
-# Stage 2: Production runner stage
+# Stage 2: Production runner
 FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl \
+  && corepack enable \
+  && corepack prepare pnpm@10.11.0 --activate
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 
-# Copy output from builder
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
 
-# Start Nuxt Nitro server
-CMD ["node", ".output/server/index.mjs"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/auth/me || exit 1
+
+ENTRYPOINT ["./docker-entrypoint.sh"]

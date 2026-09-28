@@ -59,6 +59,7 @@ export function useAudioPlayback() {
     playingWord.value = toSpeak
     errorMessage.value = ''
 
+    // Option 1: Custom audioUrl if provided
     if (vocab.audioUrl) {
       try {
         const audio = new Audio(vocab.audioUrl)
@@ -68,38 +69,85 @@ export function useAudioPlayback() {
           errorMessage.value = 'Lỗi khi phát âm thanh'
           playingWord.value = null
         }
+        return
       } catch (err) {
-        errorMessage.value = 'Lỗi khi phát âm thanh'
-        playingWord.value = null
+        // Fallback to proxy
       }
-    } else {
+    }
+
+    // Determine language prefix
+    const rawLang = (vocab.lang || 'de').toLowerCase()
+    const targetPrefix = rawLang.startsWith('cs') ? 'cs' : rawLang.startsWith('de') ? 'de' : 'en'
+    const normLang = targetPrefix === 'cs' ? 'cs-CZ' : targetPrefix === 'de' ? 'de-DE' : 'en-US'
+
+    const speakBrowserFallback = () => {
       try {
         speechSynthesis.cancel()
-
-        const targetLang = vocab.lang || 'de-DE'
         const utterance = new SpeechSynthesisUtterance(toSpeak)
-        utterance.lang = targetLang
+        utterance.lang = normLang
         utterance.rate = 0.9
-        utterance.pitch = 1
-
         const voices = speechSynthesis.getVoices()
-        const matchingVoice = voices.find((v) => v.lang.startsWith(targetLang.split('-')[0]))
-        if (matchingVoice) {
-          utterance.voice = matchingVoice
-        }
-
+        const nativeVoice =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase().replace('_', '-').startsWith(targetPrefix) &&
+              (v.localService || v.name.includes('Google') || v.name.includes('Natural')),
+          ) || voices.find((v) => v.lang.toLowerCase().replace('_', '-').startsWith(targetPrefix))
+        if (nativeVoice) utterance.voice = nativeVoice
         utterance.onend = () => (playingWord.value = null)
         utterance.onerror = () => {
           errorMessage.value = 'Lỗi khi phát âm'
           playingWord.value = null
         }
-
         speechSynthesis.speak(utterance)
-      } catch (err) {
-        errorMessage.value = 'Lỗi khi sử dụng SpeechSynthesis'
+      } catch {
+        errorMessage.value = 'Lỗi phát âm'
         playingWord.value = null
       }
     }
+
+    let ttsMode = 'auto'
+    try {
+      ttsMode = String(useRuntimeConfig().public?.ttsMode || 'auto').toLowerCase()
+    } catch {
+      ttsMode = 'auto'
+    }
+
+    if (ttsMode === 'browser' || targetPrefix === 'en') {
+      speakBrowserFallback()
+      return
+    }
+
+    // High quality server TTS with blob check → browser fallback
+    void (async () => {
+      try {
+        const proxyAudioUrl = `/api/tts?text=${encodeURIComponent(toSpeak.slice(0, 300))}&lang=${targetPrefix}`
+        const res = await fetch(proxyAudioUrl, { credentials: 'include' })
+        if (!res.ok || !(res.headers.get('content-type') || '').includes('audio')) {
+          speakBrowserFallback()
+          return
+        }
+        const blob = await res.blob()
+        if (blob.size < 64) {
+          speakBrowserFallback()
+          return
+        }
+        const objectUrl = URL.createObjectURL(blob)
+        const audio = new Audio(objectUrl)
+        audio.playbackRate = 0.95
+        audio.onended = () => {
+          URL.revokeObjectURL(objectUrl)
+          playingWord.value = null
+        }
+        audio.onerror = () => {
+          URL.revokeObjectURL(objectUrl)
+          speakBrowserFallback()
+        }
+        await audio.play()
+      } catch {
+        speakBrowserFallback()
+      }
+    })()
   }
 
   // Handle recognition errors

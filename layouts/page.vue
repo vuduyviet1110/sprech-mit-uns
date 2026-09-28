@@ -1,6 +1,7 @@
 <template>
   <div class="overflow-x-clip">
-    <LayoutPageNavbar class="h-[64px] max-h-[64px]" />
+    <AwesomeCustomCursor />
+    <LayoutPageNavbar />
     <LayoutPageContent>
       <slot />
     </LayoutPageContent>

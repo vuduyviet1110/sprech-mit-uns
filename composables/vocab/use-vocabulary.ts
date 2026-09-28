@@ -1,21 +1,21 @@
 import { ref, computed, watch } from 'vue'
-import type { VocabularyWord } from '~/utils/types'
+import type { UserVocabularyEntry } from '~/utils/types'
 import { useLanguage } from '~/composables/use-language'
+import { useSession } from '~/composables/use-session'
 
-const { currentLanguage } = useLanguage()
-const vocabularies = ref<VocabularyWord[]>([])
+const entries = ref<UserVocabularyEntry[]>([])
 const selectedLevel = ref('')
+const { currentLanguage, setLanguage } = useLanguage()
 const selectedLanguage = computed({
   get: () => currentLanguage.value,
   set: (val: string) => {
-    const { setLanguage } = useLanguage()
     if (val === 'de' || val === 'cs') setLanguage(val)
   },
 })
-const selectedTopic = ref<string | null>(null)
+const selectedSource = ref<'dictionary' | 'manual' | ''>('')
 const search = ref('')
 const page = ref(1)
-const limit = 10
+const limit = 16
 const selectedDate = ref<
   'today' | 'yesterday' | 'last_3_days' | 'this_week' | ''
 >('')
@@ -30,10 +30,13 @@ const initialLoading = ref(true)
 let watcherInitialized = false
 
 export function useVocabulary() {
+  const { userId } = useSession()
+
   const queryParams = computed(() => ({
+    userId: userId.value || undefined,
     level: selectedLevel.value || undefined,
     language: selectedLanguage.value || undefined,
-    topic: selectedTopic.value || undefined,
+    source: selectedSource.value || undefined,
     date: selectedDate.value || undefined,
     page: page.value,
     limit,
@@ -42,18 +45,15 @@ export function useVocabulary() {
   const fetchVocabularies = async (reset = false, searchQuery = '') => {
     if (loading.value || loadingMore.value) return
 
-    const isInitialLoad = reset && vocabularies.value.length === 0
+    const isInitialLoad = reset && entries.value.length === 0
     const isLoadMore = !reset && page.value > 1
 
     if (reset) {
-      vocabularies.value = []
+      entries.value = []
       page.value = 1
       hasMore.value = true
-      if (isInitialLoad) {
-        initialLoading.value = true
-      } else {
-        loading.value = true
-      }
+      if (isInitialLoad) initialLoading.value = true
+      else loading.value = true
     } else if (isLoadMore) {
       loadingMore.value = true
     } else {
@@ -61,32 +61,27 @@ export function useVocabulary() {
     }
 
     try {
-      const params = {
-        ...queryParams.value,
-        search: searchQuery || search.value || undefined,
-      }
-
       const response = await $fetch<{
-        items: VocabularyWord[]
+        items: UserVocabularyEntry[]
         meta: { hasMore: boolean; totalCount: number; currentTotal: number }
-      }>('/api/dictionary', {
-        query: params as any,
+      }>('/api/vocabulary', {
+        query: {
+          ...queryParams.value,
+          search: searchQuery || search.value || undefined,
+        } as any,
       })
 
       hasMore.value = response.meta.hasMore
       totalCount.value = response.meta.totalCount
       currentTotal.value = response.meta.currentTotal
 
-      if (reset) {
-        vocabularies.value = response.items
-      } else {
-        vocabularies.value = [...vocabularies.value, ...response.items]
-      }
+      if (reset) entries.value = response.items
+      else entries.value = [...entries.value, ...response.items]
 
       errorMessage.value = ''
     } catch (err) {
-      errorMessage.value = 'Không thể tải dữ liệu từ vựng'
-      console.error('Error fetching vocabularies:', err)
+      errorMessage.value = 'Không thể tải sổ từ vựng'
+      console.error(err)
     } finally {
       loading.value = false
       loadingMore.value = false
@@ -96,15 +91,17 @@ export function useVocabulary() {
 
   const deleteVocabulary = async (id: string) => {
     if (!id) return
-    if (!confirm('Bạn có chắc muốn xóa từ này?')) return
+    if (!confirm('Xóa từ này khỏi sổ cá nhân?')) return
 
     try {
       loading.value = true
-      await $fetch(`/api/vocabulary/${id}`, { method: 'DELETE' })
-      loading.value = false
+      await $fetch(`/api/vocabulary/${id}`, {
+        method: 'DELETE',
+        query: { userId },
+      })
       await fetchVocabularies(true)
     } catch (err) {
-      errorMessage.value = 'Lỗi khi xóa từ vựng'
+      errorMessage.value = 'Lỗi khi xóa khỏi sổ'
       console.error(err)
     } finally {
       loading.value = false
@@ -123,16 +120,21 @@ export function useVocabulary() {
 
   if (!watcherInitialized) {
     watcherInitialized = true
-    watch([selectedLevel, currentLanguage, selectedTopic, selectedDate], () => {
-      fetchVocabularies(true)
-    })
+    watch(
+      [selectedLevel, currentLanguage, selectedSource, selectedDate],
+      () => {
+        fetchVocabularies(true)
+      },
+    )
   }
 
   return {
-    vocabularies,
+    /** @deprecated use `entries` — kept alias for gradual migration */
+    vocabularies: entries,
+    entries,
     selectedLevel,
     selectedLanguage,
-    selectedTopic,
+    selectedSource,
     selectedDate,
     search,
     errorMessage,
@@ -144,6 +146,7 @@ export function useVocabulary() {
     loading,
     loadingMore,
     initialLoading,
+    userId,
     fetchVocabularies,
     loadMoreVocabularies,
     deleteVocabulary,

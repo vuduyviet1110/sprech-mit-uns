@@ -17,8 +17,8 @@
             :key="word.id"
             :class="[
               'p-4',
-              wordsProgress[word.id]?.isMastered
-                ? 'bg-green-50 border-green-200'
+              (wordsProgress[word.id]?.masteryLevel || 0) >= 4
+                ? 'bg-primary-50 border-primary-200'
                 : wordsProgress[word.id]?.correctCount ||
                     wordsProgress[word.id]?.incorrectCount
                   ? 'bg-blue-50 border-blue-200'
@@ -78,7 +78,7 @@
                 <span class="inline-flex items-center gap-1"><Icon name="heroicons:check" class="w-3.5 h-3.5 text-emerald-500" /> {{ wordsProgress[word.id].correctCount }}</span>
                 <span class="inline-flex items-center gap-1"><Icon name="heroicons:x-mark" class="w-3.5 h-3.5 text-red-500" /> {{ wordsProgress[word.id].incorrectCount }}</span>
                 <span class="inline-flex items-center gap-1"><Icon name="heroicons:fire-20-solid" class="w-3.5 h-3.5 text-orange-500" /> {{ wordsProgress[word.id].streak }}</span>
-                <span class="inline-flex items-center gap-1"><Icon name="heroicons:star-20-solid" class="w-3.5 h-3.5 text-amber-400" /> Lv.{{ wordsProgress[word.id].masteryLevel }}</span>
+                <span class="inline-flex items-center gap-1"><Icon name="heroicons:star-20-solid" class="w-3.5 h-3.5 text-amber-400" /> Tiến độ bài Lv.{{ wordsProgress[word.id].masteryLevel }}</span>
               </div>
 
               <!-- Action Buttons -->
@@ -93,7 +93,7 @@
                   Start Learning
                 </Button>
 
-                <template v-else-if="!wordsProgress[word.id]?.isMastered">
+                <template v-else-if="(wordsProgress[word.id]?.masteryLevel || 0) < 4">
                   <Button
                     size="sm"
                     variant="outline"
@@ -110,24 +110,21 @@
                     <Icon name="mdi:check" class="h-4 w-4 mr-2" />
                     Got it!
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    class="border-yellow-200 text-yellow-700 hover:bg-yellow-50"
-                    @click="handleWordAction(word.id, 'master')"
-                  >
-                    <Icon name="mdi:star" class="h-4 w-4 mr-2" />
-                    Master
-                  </Button>
                 </template>
 
-                <Badge
-                  v-else
-                  class="bg-green-100 text-green-700 px-3 py-1 flex items-center"
-                >
-                  <Icon name="mdi:star" class="h-4 w-4 mr-2" />
-                  Mastered!
-                </Badge>
+                <div v-else class="flex flex-col sm:flex-row gap-2 w-full">
+                  <Badge class="bg-primary-100 text-primary-700 px-3 py-1 flex items-center justify-center">
+                    <Icon name="mdi:book-open-page-variant" class="h-4 w-4 mr-2" />
+                    Tiến độ bài đạt max
+                  </Badge>
+                  <NuxtLink
+                    to="/review"
+                    class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-500 text-white text-xs font-bold hover:bg-primary-400"
+                  >
+                    <Icon name="lucide:brain" class="w-3.5 h-3.5" />
+                    Ôn SRS để thuộc lâu
+                  </NuxtLink>
+                </div>
               </div>
             </div>
           </Card>
@@ -214,7 +211,7 @@ onMounted(loadProgress)
 
 function handleWordAction(
   wordId: string,
-  action: 'add' | 'correct' | 'incorrect' | 'master',
+  action: 'add' | 'correct' | 'incorrect',
 ) {
   const current = wordsProgress.value[wordId] || {
     correctCount: 0,
@@ -250,10 +247,7 @@ function handleWordAction(
       updated.nextReviewAt = new Date(now.getTime() + 3600000)
       updated.lastReviewedAt = now
       break
-    case 'master':
-      updated.isMastered = true
-      updated.masteryLevel = 5
-      break
+    // 'master' removed — long-term mastery only via SRS /review
   }
 
   updateWordProgress('user123', wordId, updated)

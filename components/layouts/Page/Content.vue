@@ -1,6 +1,6 @@
 <template>
   <div
-    class="flex w-full pt-[64px]"
+    class="flex flex-col w-full pt-14"
     :style="{ 'min-height': 'var(--layout-page-content-min-height)' }"
   >
     <slot />

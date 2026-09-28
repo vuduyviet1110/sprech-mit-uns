@@ -2,4 +2,14 @@
 :root {
   // layouts > page > content
   --layout-page-content-min-height: calc(100vh - 42px);
+
+  /* Design tokens — Sprech Mit Uns (see DESIGN.md) */
+  --smu-primary: #3ba676;
+  --smu-primary-hover: #2c7d59;
+  --smu-primary-soft: #b4e4cf;
+  --smu-blue: #0096ff;
+  --smu-red: #ff6464;
+  --smu-page-max: 1600px;
+  --smu-radius-control: 0.75rem; /* rounded-xl */
+  --smu-radius-surface: 1rem; /* rounded-2xl */
 }

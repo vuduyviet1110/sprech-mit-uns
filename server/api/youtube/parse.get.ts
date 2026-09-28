@@ -1,8 +1,13 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { YoutubeTranscript } from 'youtube-transcript'
+import { assertRateLimit, clientIp } from '~/server/utils/rate-limit'
+import { requireUserId } from '~/server/utils/user'
 
 export default defineEventHandler(async (event) => {
   try {
+    await requireUserId(event)
+    assertRateLimit(`youtube:parse:${clientIp(event)}`, 30, 60 * 60 * 1000)
+
     const query = getQuery(event)
     const rawUrl = (query.url as string) || (query.youtubeId as string) || 'https://www.youtube.com/watch?v=4-eDoThe6qo'
 

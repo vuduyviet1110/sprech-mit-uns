@@ -1,6 +1,8 @@
 import confetti from 'canvas-confetti'
 
 export function useGamification() {
+  const { cue } = useStudyMascot()
+
   /**
    * Bắn pháo hoa rực rỡ khi hoàn thành bài test / đạt điểm tối đa
    */
@@ -34,6 +36,7 @@ export function useGamification() {
    * Phát âm thanh Ting! (đúng) hoặc Bzz! (sai) dùng Web Audio API thuần (không lo thiếu file mp3)
    */
   const playSound = (type: 'correct' | 'wrong' | 'complete') => {
+    cue(type)
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
       if (!AudioCtx) return

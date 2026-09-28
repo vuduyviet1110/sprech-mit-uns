@@ -1,6 +1,10 @@
 <script lang="ts" setup>
+import { useSrsStore } from '~/stores/useSrsStore'
+
 const nuxtApp = useNuxtApp()
 const { parseMenuRoute, parseMenuTitle } = useNavbarParser()
+
+const srsStore = useSrsStore()
 
 const props = defineProps({
   menu: {
@@ -14,6 +18,11 @@ const props = defineProps({
     default: true,
   },
 })
+
+const isReviewLink = computed(() => {
+  const routeStr = parseMenuRoute(props.menu?.to)
+  return routeStr === '/review'
+})
 </script>
 
 <template>
@@ -21,13 +30,19 @@ const props = defineProps({
     <NuxtLink :to="parseMenuRoute(menu?.to)" #="{ isActive }">
       <div
         :class="[
-          'transition-all duration-300 hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-lg w-full',
+          'transition-all duration-300 hover:bg-gray-100 dark:hover:bg-gray-800 px-2.5 py-1.5 rounded-lg w-full flex items-center justify-between',
           isActive
             ? 'text-gray-900 dark:text-gray-100 font-bold'
             : 'text-gray-700 dark:text-gray-300',
         ]"
       >
-        {{ parseMenuTitle(menu?.title) }}
+        <span>{{ parseMenuTitle(menu?.title) }}</span>
+        <span
+          v-if="isReviewLink && Number(srsStore.dueCount) > 0"
+          class="ml-2 px-2 py-0.5 text-xs font-black text-white bg-red-500 rounded-full animate-pulse shadow-sm"
+        >
+          {{ srsStore.dueCount }}
+        </span>
       </div>
     </NuxtLink>
   </template>
@@ -38,15 +53,19 @@ const props = defineProps({
           'text-gray-900 dark:text-gray-100 font-bold': isActive,
           'text-gray-700 dark:text-gray-300': !isActive,
         }"
-        >{{ parseMenuTitle(menu?.title) }}</span
+        class="inline-flex items-center gap-1.5"
       >
+        <span>{{ parseMenuTitle(menu?.title) }}</span>
+        <span
+          v-if="isReviewLink && Number(srsStore.dueCount) > 0"
+          class="px-2 py-0.5 text-xs font-black text-white bg-red-500 rounded-full animate-pulse shadow-xs"
+        >
+          {{ srsStore.dueCount }}
+        </span>
+      </span>
     </NuxtLink>
   </template>
-  <!-- <template v-else-if="menu?.type === 'button'">
-    <AwesomeButton
-      :text="parseMenuTitle(menu?.title)"
-      size="xs"
-      :to="parseMenuRoute(menu.to)"
-    />
-  </template> -->
 </template>
+
+
+

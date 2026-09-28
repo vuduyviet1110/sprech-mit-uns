@@ -1,6 +1,11 @@
 <script lang="ts" setup>
+import { useLanguage } from '~/composables/use-language'
+
 const { awesome } = useAppConfig()
 const { parseMenuRoute, parseMenuTitle } = useNavbarParser()
+const srsStore = useSrsStore()
+const route = useRoute()
+const { currentLanguage } = useLanguage()
 
 const showDrawer = ref(false)
 const menus = computed(
@@ -8,38 +13,41 @@ const menus = computed(
     (awesome?.layout?.page?.navbar?.menus ||
       []) as AwesomeLayoutPageNavbarMenu[],
 )
+
+onMounted(() => {
+  srsStore.fetchDueCount(currentLanguage.value)
+})
+
+watch([() => route.path, () => currentLanguage.value], () => {
+  srsStore.fetchDueCount(currentLanguage.value)
+})
 </script>
+
 
 <template>
   <header
-    class="fixed top-0 w-full z-40 border-b border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/60 backdrop-blur"
+    class="fixed top-0 w-full z-40 h-14 border-b border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/60 backdrop-blur"
   >
-    <div class="mx-8 flex items-center justify-between px-4 py-4">
-      <NuxtLink to="/" class="text-primary-600 font-bold text-lg capitalize">
-        {{ awesome.name }}
-      </NuxtLink>
+    <div class="w-full h-full flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center gap-5 lg:gap-7 min-w-0">
+        <NuxtLink to="/" class="shrink-0 text-primary-600 font-bold text-base tracking-tight">
+          {{ awesome.name }}
+        </NuxtLink>
 
-      <div class="hidden md:flex items-center gap-6">
-        <div class="flex items-center gap-4 text-sm">
+        <div class="hidden md:flex items-center gap-3 text-sm">
           <LayoutPageNavbarMenuWrapper
             v-for="(item, i) in menus"
             :key="i"
             :menu="item"
           />
         </div>
+      </div>
 
-        <div class="flex items-center gap-3 text-xl pl-4">
-          <LayoutPageNavbarDropdownLanguageSwitcher />
-          <LayoutPageNavbarDropdownThemeSwitcher />
-          <AwesomeLink
-            v-if="awesome?.project?.links?.github"
-            class="text-gray-600 dark:text-gray-400"
-            :href="awesome.project.links.github"
-          >
-            <Icon name="mdi:github-face" />
-          </AwesomeLink>
-          <LayoutPageNavbarDropdownUser />
-        </div>
+      <div class="hidden md:flex items-center gap-2.5 text-xl shrink-0">
+        <LayoutPageNavbarDropdownLanguageSwitcher />
+        <LayoutPageNavbarDropdownCursorToggle />
+        <LayoutPageNavbarDropdownThemeSwitcher />
+        <LayoutPageNavbarDropdownUser />
       </div>
 
       <div class="flex md:hidden items-center gap-3 text-xl">
@@ -47,7 +55,7 @@ const menus = computed(
           class="text-gray-600 dark:text-gray-400"
           @click.prevent="showDrawer = !showDrawer"
         >
-          <Icon name="heroicons:bars-3-bottom-right-20-solid" />
+          <Icon name="lucide:menu" />
         </AwesomeLink>
       </div>
     </div>
@@ -124,14 +132,6 @@ const menus = computed(
         </AwesomeActionSheetItem>
       </AwesomeActionSheetGroup>
 
-      <AwesomeActionSheetGroup>
-        <AwesomeActionSheetItemButton
-          class="flex justify-center items-center gap-2 text-sm"
-        >
-          <Icon name="mdi:github-face" />
-          <span>Github</span>
-        </AwesomeActionSheetItemButton>
-      </AwesomeActionSheetGroup>
     </AwesomeActionSheet>
   </header>
 </template>

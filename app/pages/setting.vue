@@ -1,235 +1,222 @@
 <script lang="ts" setup>
-// import {
-//   TabGroup,
-//   TabList,
-//   Tab as HeadlessUiTab,
-//   TabPanels,
-//   TabPanel,
-// } from '@headlessui/vue'
-// import { capitalize } from '~/utils/str'
-// import { Size } from '~/composables'
+import { useDailyPath } from '~/composables/use-daily-path'
+import { useDailyQuests } from '~/composables/use-daily-quests'
+import { useSession } from '~/composables/use-session'
 
-// composable
-const screen = useAwesomeScreen()
-
-// compiler macro
 definePageMeta({ layout: 'page' })
-useHead({ title: 'Settings' })
+useHead({ title: 'Cài Đặt Ứng Dụng - Sprech Mit Uns' })
 
-// funcs
-const randomToken = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let token = ''
-  for (let i = 0; i < 255; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length))
+const colorMode = useColorMode()
+const { settings, saveLearningSettings, loadSettings } = useDailyPath()
+const { syncSrsQuestTotal } = useDailyQuests()
+const { clearSession, fetchMe, isAuthenticated } = useSession()
+
+const primaryLang = ref('de')
+const speechRate = ref(0.85)
+const dailyReminder = ref(true)
+const autoPlayAudio = ref(true)
+const srsTargetPerDay = ref(20)
+const savedFlash = ref(false)
+const authMsg = ref('')
+const meEmail = ref<string | null>(null)
+
+onMounted(async () => {
+  await loadSettings()
+  primaryLang.value = settings.value.primaryLang
+  speechRate.value = settings.value.speechRate
+  dailyReminder.value = settings.value.dailyReminder
+  autoPlayAudio.value = settings.value.autoPlayAudio
+  srsTargetPerDay.value = settings.value.dailyReviewTarget
+  try {
+    const me = await fetchMe()
+    meEmail.value = me.email
+  } catch {
+    // ignore
   }
-  return token
+})
+
+const saveSettings = () => {
+  saveLearningSettings({
+    primaryLang: primaryLang.value,
+    speechRate: speechRate.value,
+    dailyReminder: dailyReminder.value,
+    autoPlayAudio: autoPlayAudio.value,
+    dailyReviewTarget: srsTargetPerDay.value,
+  })
+  syncSrsQuestTotal(srsTargetPerDay.value)
+  savedFlash.value = true
+  setTimeout(() => {
+    savedFlash.value = false
+  }, 2500)
 }
 
-// state
-const username = ref('vuduyviet1110')
-const id = ref(randomToken())
-const enableSpamProtection = ref(false)
-const enableDirList = ref(false)
-const enableAdvancedSetting = ref(false)
-
-// methods
-const validate = async () => {
-  // fetch username from github api
-  try {
-    const response = await fetch(
-      `https://api.github.com/users/${username.value}`,
-    )
-    if (response.status !== 200) {
-      throw new Error(
-        `error when fetching username : ${response.statusText} (${response.status})`,
-      )
-    }
-    const data = (await response.json()) as {
-      name: string
-      id: string
-    }
-    alert(`Found Accout Name ${data.name} with id : ${data.id}`)
-    console.log(data)
-  } catch (err) {
-    alert(err)
-  }
+const logout = async () => {
+  await clearSession()
+  meEmail.value = null
+  authMsg.value = 'Đã đăng xuất.'
+  await navigateTo('/login')
 }
 </script>
 
 <template>
-  <LayoutPageWrapper>
-    <LayoutPageSection class="mb-0">
-      <AwesomeAlertBanner
-        type="success"
-        title="This is a page for testing purposes"
-        text="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
-        class="mb-6"
-      />
-    </LayoutPageSection>
-    <LayoutPageHeader>
-      <LayoutPageTitle text="Setting" class="capitalize" />
-    </LayoutPageHeader>
+  <LayoutPageWrapper class="min-h-screen">
     <LayoutPageSection>
-      <div class="mb-6">
-        <HeadlessTabGroup
-          as="div"
-          class="flex flex-col md:flex-row md:space-x-4"
-          :vertical="screen.higherThan('md')"
-        >
-          <HeadlessTabList
-            class="w-full md:w-1/6 flex md:flex-col rounded-lg mb-2"
-          >
-            <HeadlessTab
-              v-for="(item, i) in ['General', 'Protection', 'Advanced']"
-              :key="i"
-              v-slot="{ selected }"
-              as="template"
-            >
+      <div class="w-full max-w-[1600px] mx-auto space-y-8 px-4 sm:px-6 lg:px-10">
+        <div class="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-6">
+          <div class="space-y-2">
+            <span class="px-3.5 py-1 text-xs font-extrabold rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 uppercase tracking-wider">
+              Application Settings
+            </span>
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Cài Đặt Hệ Thống
+            </h1>
+            <p class="text-slate-600 dark:text-slate-400 text-base md:text-lg leading-relaxed">
+              Tùy chỉnh ngôn ngữ ưu tiên, tốc độ phát âm và giao diện.
+            </p>
+          </div>
+        </div>
+
+        <div class="max-w-4xl space-y-8">
+          <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+            <h3 class="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <Icon name="lucide:user-round" class="w-5 h-5 text-primary-500" />
+              <span>Phiên học viên</span>
+            </h3>
+            <p class="text-xs text-slate-500">
+              Hiện tại:
+              <span class="font-extrabold text-slate-800 dark:text-slate-200">
+                {{ meEmail || 'Chưa đăng nhập' }}
+              </span>
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <NuxtLink
+                v-if="!isAuthenticated"
+                to="/login"
+                class="px-4 py-2 rounded-xl bg-primary-500 text-white text-xs font-extrabold"
+              >
+                Đăng nhập
+              </NuxtLink>
+              <NuxtLink
+                v-if="!isAuthenticated"
+                to="/register"
+                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold"
+              >
+                Đăng ký
+              </NuxtLink>
               <button
-                :class="[
-                  'md:w-full text-left px-3 rounded py-2.5 text-sm leading-5 transition-all hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-white/[0.12] dark:hover:text-white',
-                  selected
-                    ? 'font-extrabold'
-                    : 'text-gray-800 dark:text-gray-400',
-                ]"
+                v-if="isAuthenticated"
+                type="button"
+                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
+                @click="logout"
               >
-                {{ item }}
+                Đăng xuất
               </button>
-            </HeadlessTab>
-          </HeadlessTabList>
-          <HeadlessTabPanels class="flex-1">
-            <!-- general -->
-            <HeadlessTabPanel>
-              <AwesomeCard class="mb-6">
-                <AwesomeCardContent>
-                  <AwesomeCardTitle
-                    class="capitalize"
-                    text="validate github profile"
-                  />
-                  <p class="mb-2">
-                    type your github username and click the button to validate.
-                  </p>
-                  <div class="flex">
-                    <AwesomeFormTextInput
-                      v-model="username"
-                      class="w-full md:w-1/3"
-                    >
-                      <template #prefix-disabled>
-                        <span class="flex-1 px-4 py-2">github.com/</span>
-                      </template>
-                    </AwesomeFormTextInput>
-                  </div>
-                </AwesomeCardContent>
-                <AwesomeCardFooter
-                  class="flex flex-col space-y-2 md:space-y md:flex-row items-center md:justify-between"
+            </div>
+            <p v-if="authMsg" class="text-xs font-bold text-slate-600 dark:text-slate-300">{{ authMsg }}</p>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+            <h3 class="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <Icon name="lucide:languages" class="w-5 h-5 text-primary-500" />
+              <span>Tùy Chỉnh Học Tập</span>
+            </h3>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1">NGÔN NGỮ ƯU TIÊN BAN ĐẦU</label>
+                <select
+                  v-model="primaryLang"
+                  class="w-full md:w-72 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:border-primary-500"
                 >
-                  <p>
-                    Learn more about
-                    <AwesomeLink
-                      class="underline font-bold capitalize"
-                      text="github users api"
-                      href="https://docs.github.com/en/rest/users/users#get-a-user"
-                    />
-                  </p>
-                  <AwesomeButton
-                    class="capitalize"
-                    size="sm"
-                    type="opposite"
-                    text="validate"
-                    @click="validate"
-                  />
-                </AwesomeCardFooter>
-              </AwesomeCard>
-              <AwesomeCard class="mb-4">
-                <AwesomeCardContent>
-                  <AwesomeCardTitle class="capitalize" text="bot id" />
-                  <p class="mb-2">This is your bot ID.</p>
-                  <div class="flex">
-                    <AwesomeFormTextInput v-model="id" class="w-full md:w-1/3">
-                      <template #suffix>
-                        <AwesomeButton
-                          type="opposite"
-                          class="flex space-x-1 border-none"
-                        >
-                          <Icon name="ic:baseline-content-copy" />
-                          <span>Copy</span>
-                        </AwesomeButton>
-                      </template>
-                    </AwesomeFormTextInput>
-                  </div>
-                </AwesomeCardContent>
-                <AwesomeCardFooter class="justify-between">
-                  <p>Used when interacting with the bot.</p>
-                </AwesomeCardFooter>
-              </AwesomeCard>
-            </HeadlessTabPanel>
-            <!-- protection -->
-            <HeadlessTabPanel>
-              <AwesomeCard
-                :class="{
-                  'mb-4': true,
-                  'border-red-500 dark:border-red-500': !enableSpamProtection,
-                }"
+                  <option value="de">🇩🇪 Tiếng Đức (Deutsch)</option>
+                  <option value="cs">🇨🇿 Tiếng Séc (Čeština)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1">TỐC ĐỘ PHÁT ÂM (TTS RATE: {{ speechRate }}x)</label>
+                <input
+                  v-model.number="speechRate"
+                  type="range"
+                  min="0.5"
+                  max="1.2"
+                  step="0.05"
+                  class="w-full md:w-72 accent-primary-500 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1">CHỈ TIÊU ÔN SRS / NGÀY</label>
+                <input
+                  v-model.number="srsTargetPerDay"
+                  type="number"
+                  min="1"
+                  max="200"
+                  class="w-full md:w-36 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:border-primary-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+            <h3 class="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <Icon name="lucide:volume-2" class="w-5 h-5 text-primary-500" />
+              <span>Âm Thanh & Thông Báo</span>
+            </h3>
+
+            <div class="space-y-3">
+              <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 cursor-pointer">
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Tự động phát âm thanh khi lật thẻ flashcard</span>
+                <input v-model="autoPlayAudio" type="checkbox" class="w-4 h-4 accent-primary-500 cursor-pointer" />
+              </label>
+
+              <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 cursor-pointer">
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Bật nhắc nhở học tập hàng ngày</span>
+                <input v-model="dailyReminder" type="checkbox" class="w-4 h-4 accent-primary-500 cursor-pointer" />
+              </label>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+            <h3 class="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <Icon name="lucide:sun-moon" class="w-5 h-5 text-primary-500" />
+              <span>Giao Diện Ứng Dụng</span>
+            </h3>
+
+            <div class="flex items-center gap-3">
+              <button
+                class="px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+                :class="colorMode.preference === 'light' ? 'bg-primary-500 text-white border-primary-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'"
+                @click="colorMode.preference = 'light'"
               >
-                <AwesomeCardContent>
-                  <AwesomeCardTitle class="capitalize" text="spam protection" />
-                  <p class="mb-2">toggle enable to remove the red border</p>
-                  <div class="flex">
-                    <AwesomeFormSwitch v-model="enableSpamProtection">
-                      <span class="capitalize">{{
-                        enableSpamProtection ? 'enabled' : 'disabled'
-                      }}</span>
-                    </AwesomeFormSwitch>
-                  </div>
-                </AwesomeCardContent>
-                <AwesomeCardFooter class="justify-between">
-                  <p>if enable we will secure your comments from spam</p>
-                </AwesomeCardFooter>
-              </AwesomeCard>
-            </HeadlessTabPanel>
-            <!-- advanced -->
-            <HeadlessTabPanel>
-              <AwesomeCard class="mb-6">
-                <AwesomeCardContent>
-                  <AwesomeCardTitle
-                    class="capitalize"
-                    text="enable advanced settings"
-                  />
-                  <p class="mb-2">
-                    you can enable advanced settings to change the settings
-                  </p>
-                  <div class="flex">
-                    <AwesomeFormSwitch v-model="enableAdvancedSetting">
-                      <span class="capitalize">{{
-                        enableAdvancedSetting ? 'enabled' : 'disabled'
-                      }}</span>
-                    </AwesomeFormSwitch>
-                  </div>
-                </AwesomeCardContent>
-              </AwesomeCard>
-              <AwesomeCard class="mb-6" :disabled="!enableAdvancedSetting">
-                <AwesomeCardContent>
-                  <AwesomeCardTitle
-                    class="capitalize"
-                    text="directory listing"
-                  />
-                  <p class="mb-2">
-                    if no index file is present within a directory, the
-                    directory contents will be displayed.
-                  </p>
-                  <div class="flex">
-                    <AwesomeFormSwitch v-model="enableDirList" on>
-                      <span class="capitalize">{{
-                        enableDirList ? 'enabled' : 'disabled'
-                      }}</span>
-                    </AwesomeFormSwitch>
-                  </div>
-                </AwesomeCardContent>
-              </AwesomeCard>
-            </HeadlessTabPanel>
-          </HeadlessTabPanels>
-        </HeadlessTabGroup>
+                <Icon name="lucide:sun" class="w-4 h-4" />
+                <span>Giao Diện Sáng (Light)</span>
+              </button>
+
+              <button
+                class="px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer"
+                :class="colorMode.preference === 'dark' ? 'bg-primary-500 text-white border-primary-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'"
+                @click="colorMode.preference = 'dark'"
+              >
+                <Icon name="lucide:moon" class="w-4 h-4" />
+                <span>Giao Diện Tối (Dark)</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              class="px-6 py-3 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-extrabold text-sm rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2"
+              @click="saveSettings"
+            >
+              <Icon name="lucide:check" class="w-5 h-5" />
+              <span>Lưu Cấu Hình</span>
+            </button>
+            <p v-if="savedFlash" class="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+              Đã lưu.
+            </p>
+          </div>
+        </div>
       </div>
     </LayoutPageSection>
   </LayoutPageWrapper>

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useSrsStore } from '~/stores/useSrsStore'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: '📰 Tin tức & SRS Reader - Sprech Mit Uns' })
 
 const { playSound } = useGamification()
+const { currentLanguage } = useLanguage()
+const srsStore = useSrsStore()
+
 
 interface Article {
   id: string
@@ -16,12 +20,13 @@ interface Article {
   sourceUrl?: string
   sourceName?: string
   isSaved?: boolean
+  lang?: 'de' | 'cs'
 }
 
-// Initial Daily News Articles Data
-const articles = ref<Article[]>([
+// Initial Daily News Articles Data for both languages
+const initialGermanArticles: Article[] = [
   {
-    id: 'news-1',
+    id: 'news-de-1',
     title: 'Guten Tag Berlin: Das Wetter im Frühling',
     date: '08.09.2026',
     level: 'A1',
@@ -29,9 +34,10 @@ const articles = ref<Article[]>([
     content: 'Heute ist das Wetter in Berlin sehr schön. Die Sonne scheint und die Temperatur liegt bei zwanzig Grad.',
     sourceName: 'SprechMitUns Daily',
     isSaved: true,
+    lang: 'de',
   },
   {
-    id: 'news-2',
+    id: 'news-de-2',
     title: 'Neue Fahrradwege in München',
     date: '07.09.2026',
     level: 'A2',
@@ -39,18 +45,60 @@ const articles = ref<Article[]>([
     content: 'München baut neue Fahrradwege für mehr Sicherheit im Straßenverkehr. Viele Menschen fahren gern mit dem Fahrrad zur Arbeit.',
     sourceName: 'SprechMitUns Daily',
     isSaved: false,
+    lang: 'de',
   },
-])
+]
+
+const initialCzechArticles: Article[] = [
+  {
+    id: 'news-cs-1',
+    title: 'Krásné jarní počasí v Praze',
+    date: '08.09.2026',
+    level: 'A1',
+    summary: 'Thời tiết mùa xuân tươi đẹp tại Praha hôm nay.',
+    content: 'Dnes je v Praze velmi pěkné počasí. Slunce svítí a teplota dosahuje dvaceti stupňů.',
+    sourceName: 'SprechMitUns Czech Daily',
+    isSaved: true,
+    lang: 'cs',
+  },
+  {
+    id: 'news-cs-2',
+    title: 'Nové cyklostezky v Brně',
+    date: '07.09.2026',
+    level: 'A2',
+    summary: 'Thành phố Brno mở rộng nhiều làn đường xe đạp mới cho người dân.',
+    content: 'Brno staví nové cyklostezky pro větší bezpečnost v městském provozu. Mnoho lidí jezdí do práce na kole.',
+    sourceName: 'SprechMitUns Czech Daily',
+    isSaved: false,
+    lang: 'cs',
+  },
+]
+
+const articles = ref<Article[]>([...initialGermanArticles, ...initialCzechArticles])
 
 const searchQuery = ref('')
 const selectedArticleIdx = ref(0)
 
+// Active language code ('de' or 'cs')
+const activeLang = computed(() => {
+  return currentLanguage.value === 'cs' ? 'cs' : 'de'
+})
+
+const languageLabel = computed(() => (activeLang.value === 'cs' ? 'tiếng Séc' : 'tiếng Đức'))
+const speechLangCode = computed(() => (activeLang.value === 'cs' ? 'cs-CZ' : 'de-DE'))
+
+// Filter articles by search query and active language
 const filteredArticles = computed(() => {
-  if (!searchQuery.value.trim()) return articles.value
+  const langFiltered = articles.value.filter((a) => (a.lang || 'de') === activeLang.value)
+  if (!searchQuery.value.trim()) return langFiltered
   const q = searchQuery.value.toLowerCase()
-  return articles.value.filter(
+  return langFiltered.filter(
     (a) => a.title.toLowerCase().includes(q) || a.summary.toLowerCase().includes(q) || a.level.toLowerCase().includes(q)
   )
+})
+
+watch(activeLang, () => {
+  selectedArticleIdx.value = 0
 })
 
 const selectedArticle = computed(() => {
@@ -66,12 +114,30 @@ const savedWords = ref<string[]>([])
 // Scraper Modal & Filter State
 const isScrapeModalOpen = ref(false)
 const scrapeMode = ref<'rss' | 'url'>('rss')
-const selectedSource = ref<'all' | 'tagesschau' | 'dw'>('all')
+const selectedSource = ref<string>('all')
 const scrapeCount = ref<number>(3)
 const inputUrl = ref('')
 const isScraping = ref(false)
 const scrapeError = ref<string | null>(null)
 const scrapeSuccessMsg = ref<string | null>(null)
+const pageAlertError = ref<string | null>(null)
+
+// Available RSS sources dynamically based on active language
+const availableRssSources = computed(() => {
+  if (activeLang.value === 'cs') {
+    return [
+      { key: 'all', name: 'Tất cả nguồn tiếng Séc (iROZHLAS, ČT24, iDNES)' },
+      { key: 'irozhlas', name: 'iROZHLAS' },
+      { key: 'ct24', name: 'ČT24 (Česká televize)' },
+      { key: 'idnes', name: 'iDNES.cz' },
+    ]
+  }
+  return [
+    { key: 'all', name: 'Tất cả nguồn tiếng Đức (Tagesschau & DW)' },
+    { key: 'tagesschau', name: 'Tagesschau' },
+    { key: 'dw', name: 'Deutsche Welle' },
+  ]
+})
 
 onMounted(() => {
   try {
@@ -101,32 +167,52 @@ function saveSavedArticlesToStorage() {
   }
 }
 
-// Split article text into interactive words
+// Split article text into interactive words & paragraphs
+const articleParagraphs = computed(() => {
+  if (!selectedArticle.value || !selectedArticle.value.content) return []
+  const text = selectedArticle.value.content
+  const rawParagraphs = text.split(/\n+/).map(p => p.trim()).filter(Boolean)
+  if (rawParagraphs.length > 0) {
+    return rawParagraphs.map(p => p.split(/\s+/).filter(Boolean)).filter(p => p.length > 0)
+  }
+  return [text.split(/\s+/).filter(Boolean)]
+})
+
 const wordsList = computed(() => {
   if (!selectedArticle.value || !selectedArticle.value.content) return []
   return selectedArticle.value.content.split(/\s+/).filter(Boolean)
 })
 
+const cleanWordStr = (str: string) => {
+  return str.replace(/[.,/#!$%^&*;:{}=\-_`~()"']/g, '')
+}
+
 const handleWordClick = async (word: string) => {
-  const cleanWord = word.replace(/[.,/#!$%^&*;:{}=\-_`~()"']/g, '')
+  const cleanWord = cleanWordStr(word)
   if (!cleanWord) return
 
   activeWord.value = cleanWord
   wordMeaning.value = null
   playSound('correct')
 
-  speakText(cleanWord, 'de-DE')
+  speakText(cleanWord, speechLangCode.value)
 
   isLookingUpWord.value = true
   try {
-    const res: any = await $fetch(`/api/dictionary?search=${encodeURIComponent(cleanWord)}`)
-    if (res && res.items && res.items.length > 0) {
+    const res: any = await $fetch(`/api/dictionary?search=${encodeURIComponent(cleanWord)}&lang=${activeLang.value}`)
+    if (res && res.items && res.items.length > 0 && res.items[0].meaning) {
       wordMeaning.value = res.items[0].meaning
     } else {
-      wordMeaning.value = `Từ vựng tiếng Đức (${selectedArticle.value?.level || 'German'})`
+      // Auto-translate using server Google Translate proxy API if word not in local dictionary
+      const transRes: any = await $fetch(`/api/translate?text=${encodeURIComponent(cleanWord)}&from=${activeLang.value}&to=vi`)
+      if (transRes && transRes.translated) {
+        wordMeaning.value = transRes.translated
+      } else {
+        wordMeaning.value = `Từ vựng ${languageLabel.value}`
+      }
     }
   } catch {
-    wordMeaning.value = `Từ vựng tiếng Đức (${selectedArticle.value?.level || 'German'})`
+    wordMeaning.value = `Từ vựng ${languageLabel.value}`
   } finally {
     isLookingUpWord.value = false
   }
@@ -134,26 +220,27 @@ const handleWordClick = async (word: string) => {
 
 const speakCurrentArticle = () => {
   if (selectedArticle.value?.content) {
-    speakText(selectedArticle.value.content, 'de-DE')
+    speakText(selectedArticle.value.content, speechLangCode.value)
   }
 }
+
+const newsToastText = ref<string>('')
+let newsToastTimer: any = null
 
 const saveToSRS = async (word: string) => {
   if (!savedWords.value.includes(word)) {
     savedWords.value.push(word)
     playSound('correct')
-
-    try {
-      await $fetch('/api/srs/review', {
-        method: 'POST',
-        body: { wordId: word, quality: 4 },
-      }).catch(() => {})
-    } catch {
-      // Ignore API errors
-    }
+    newsToastText.value = `Đã thêm "${word}" vào ôn tập SRS!`
+    if (newsToastTimer) clearTimeout(newsToastTimer)
+    newsToastTimer = setTimeout(() => {
+      newsToastText.value = ''
+    }, 4000)
+    await srsStore.addToSrs(word, wordMeaning.value || undefined, activeLang.value)
   }
   activeWord.value = null
 }
+
 
 const toggleSaveArticle = (article: Article) => {
   article.isSaved = !article.isSaved
@@ -184,8 +271,8 @@ const handleScrapeNews = async () => {
   try {
     const payload =
       scrapeMode.value === 'url'
-        ? { mode: 'url', url: inputUrl.value }
-        : { mode: 'rss', source: selectedSource.value, count: scrapeCount.value }
+        ? { mode: 'url', url: inputUrl.value, lang: activeLang.value }
+        : { mode: 'rss', source: selectedSource.value, count: scrapeCount.value, lang: activeLang.value }
 
     const res: any = await $fetch('/api/news/scrape', {
       method: 'POST',
@@ -193,12 +280,21 @@ const handleScrapeNews = async () => {
     })
 
     if (res && res.articles && res.articles.length > 0) {
-      const newArticles: Article[] = res.articles.map((a: Article) => ({ ...a, isSaved: false }))
+      const newArticles: Article[] = res.articles.map((a: Article) => ({ ...a, isSaved: false, lang: activeLang.value }))
 
       articles.value = [...newArticles, ...articles.value]
       selectedArticleIdx.value = 0
-      playSound('correct')
-      scrapeSuccessMsg.value = `Đã cào thành công ${newArticles.length} bài báo mới!`
+
+      const blockedArticle = newArticles.find(a => a.content.includes('⚠️ [CHÚ Ý:'))
+      if (blockedArticle) {
+        pageAlertError.value = `Cảnh báo: Trang báo ${blockedArticle.sourceName || ''} đã chặn truy cập (Lỗi 403 Forbidden). Chỉ có thể hiển thị tóm tắt.`
+        playSound('wrong')
+      } else {
+        playSound('correct')
+        pageAlertError.value = null
+      }
+
+      scrapeSuccessMsg.value = `Đã cào ${newArticles.length} bài báo ${languageLabel.value} mới!`
       inputUrl.value = ''
 
       setTimeout(() => {
@@ -206,10 +302,16 @@ const handleScrapeNews = async () => {
         scrapeSuccessMsg.value = null
       }, 1500)
     } else {
-      scrapeError.value = 'Không tìm thấy nội dung bài báo nào.'
+      const msg = 'Không tìm thấy nội dung bài báo nào từ liên kết hoặc nguồn RSS.'
+      scrapeError.value = msg
+      pageAlertError.value = msg
+      playSound('wrong')
     }
   } catch (err: any) {
-    scrapeError.value = err.data?.statusMessage || err.message || 'Lỗi khi cào bài báo. Vui lòng kiểm tra lại URL.'
+    const errorDetail = err.data?.statusMessage || err.message || 'Không thể truy cập trang báo. Vui lòng kiểm tra lại liên kết URL.'
+    scrapeError.value = errorDetail
+    pageAlertError.value = `Lỗi cào báo: ${errorDetail}`
+    playSound('wrong')
   } finally {
     isScraping.value = false
   }
@@ -217,45 +319,57 @@ const handleScrapeNews = async () => {
 </script>
 
 <template>
-  <LayoutPageWrapper>
-    <!-- Standard Header -->
-    <LayoutPageHeader>
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <LayoutPageTitle text="📰 Tin Tức & Interactive SRS Reader" />
-          <p class="text-slate-500 dark:text-slate-400 text-base mt-1">
-            Đọc báo tiếng Đức thực tế. Bấm từ để tra nghĩa, nghe phát âm &amp; lưu vào kho ôn tập SRS!
-          </p>
+  <LayoutPageWrapper class="min-h-screen">
+    <LayoutPageSection>
+      <div class="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 space-y-6 text-left">
+        <!-- Page Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-6">
+          <div class="space-y-2">
+            <span class="px-3.5 py-1 text-xs font-extrabold rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 uppercase tracking-wider">
+              News Reader & Vocabulary Extraction
+            </span>
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
+              📰 Tin Tức & Interactive Reader
+            </h1>
+            <p class="text-slate-600 dark:text-slate-400 text-base md:text-lg leading-relaxed mt-1">
+              Đọc báo {{ languageLabel }} thực tế. Bấm từ để tra nghĩa, nghe phát âm &amp; lưu vào kho ôn tập SRS!
+            </p>
+          </div>
+          <div>
+            <button
+              @click="isScrapeModalOpen = true"
+              class="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-extrabold rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer text-xs"
+            >
+              <Icon name="lucide:sparkles" class="w-4 h-4" />
+              <span>Cào Bài Báo Mới ({{ languageLabel }})</span>
+            </button>
+          </div>
         </div>
-        <div>
-          <button
-            @click="isScrapeModalOpen = true"
-            class="px-5 py-3 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-700 hover:to-indigo-700 text-white font-extrabold rounded-2xl shadow-lg shadow-primary-500/25 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5 cursor-pointer text-sm"
-          >
-            <Icon name="lucide:sparkles" class="w-5 h-5 animate-pulse" />
-            <span>Cào Bài Báo Mới (Tối đa 5 bài)</span>
+
+        <!-- Notification Banner when Scrape Error occurs -->
+        <div v-if="pageAlertError" class="p-4 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-2xl flex items-center justify-between gap-3 text-xs text-rose-600 dark:text-rose-400 font-bold shadow-xs animate-shake">
+          <div class="flex items-center gap-2.5">
+            <Icon name="lucide:alert-triangle" class="w-5 h-5 flex-shrink-0 text-rose-500" />
+            <span>{{ pageAlertError }}</span>
+          </div>
+          <button @click="pageAlertError = null" class="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/80 rounded-lg cursor-pointer">
+            <Icon name="lucide:x" class="w-4 h-4" />
           </button>
         </div>
-      </div>
-    </LayoutPageHeader>
-
-    <LayoutPageSection>
-      <div class="space-y-6">
 
         <!-- 12 Columns Split Workspace Layout -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
           <!-- LEFT COLUMN (4 Cols): Article Catalogue / List & Search -->
           <div class="lg:col-span-4 space-y-4">
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm space-y-3">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
               <!-- Search & Filter Bar -->
               <div class="relative">
                 <Icon name="lucide:search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   v-model="searchQuery"
                   type="text"
-                  placeholder="Tìm bài đọc theo tiêu đề, trình độ..."
-                  class="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-primary-500 transition-all"
+                  placeholder="Tìm bài đọc theo tiêu đề..."
+                  class="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-primary-500 transition-all"
                 />
               </div>
 
@@ -263,21 +377,14 @@ const handleScrapeNews = async () => {
               <div class="flex items-center justify-between pt-1 text-xs">
                 <span class="font-extrabold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
                   <Icon name="lucide:library" class="w-4 h-4 text-primary-500" />
-                  <span>Danh sách bài đọc ({{ filteredArticles.length }}):</span>
+                  <span>Danh sách bài đọc {{ languageLabel }} ({{ filteredArticles.length }}):</span>
                 </span>
-                <button
-                  @click="isScrapeModalOpen = true"
-                  class="text-[11px] font-bold text-primary-500 hover:underline flex items-center gap-1"
-                >
-                  <Icon name="lucide:plus-circle" class="w-3.5 h-3.5" />
-                  <span>Cào thêm</span>
-                </button>
               </div>
 
               <!-- Article Cards List -->
-              <div v-if="filteredArticles.length === 0" class="p-6 text-center text-xs text-slate-400 space-y-2 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+              <div v-if="filteredArticles.length === 0" class="p-6 text-center text-xs text-slate-400 space-y-2 border border-dashed border-slate-200/80 dark:border-slate-800 rounded-xl">
                 <Icon name="lucide:file-question" class="w-6 h-6 mx-auto text-slate-300" />
-                <p>Không tìm thấy bài đọc nào.</p>
+                <p>Không tìm thấy bài đọc {{ languageLabel }} nào.</p>
               </div>
 
               <div v-else class="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
@@ -287,44 +394,41 @@ const handleScrapeNews = async () => {
                   @click="selectedArticleIdx = idx"
                   :class="[
                     selectedArticleIdx === idx
-                      ? 'border-primary-500 bg-primary-50/60 dark:bg-primary-950/40 ring-1 ring-primary-500/30'
-                      : 'border-slate-200/80 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-900/60 hover:border-slate-300'
+                      ? 'border-primary-500 bg-emerald-50/50 dark:bg-emerald-950/40 ring-1 ring-primary-500/30'
+                      : 'border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
                   ]"
-                  class="p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs relative group space-y-2"
+                  class="p-3.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs relative space-y-2"
                 >
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-1.5">
-                      <span class="px-2 py-0.5 bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold text-[10px] rounded uppercase">
+                      <span class="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 font-extrabold text-[10px] rounded uppercase">
                         {{ art.level }}
                       </span>
-                      <span v-if="art.isSaved" class="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-extrabold text-[10px] rounded flex items-center gap-1">
+                      <span v-if="art.isSaved" class="px-2 py-0.5 bg-amber-50 dark:bg-amber-950/80 text-amber-600 font-extrabold text-[10px] rounded flex items-center gap-1">
                         <Icon name="lucide:star" class="w-3 h-3 fill-current" />
                         Đã lưu
                       </span>
                     </div>
-                    <span v-if="art.sourceName" class="text-[10px] font-semibold text-slate-400">
-                      {{ art.sourceName }}
-                    </span>
                   </div>
 
-                  <h4 class="font-bold text-xs text-slate-900 dark:text-white line-clamp-2 leading-snug group-hover:text-primary-500 transition-colors">
+                  <h4 class="font-extrabold text-xs text-slate-900 dark:text-white line-clamp-2 leading-snug">
                     {{ art.title }}
                   </h4>
 
-                  <div class="flex items-center justify-between text-[11px] pt-1 text-slate-400 border-t border-slate-200/50 dark:border-slate-700/40">
+                  <div class="flex items-center justify-between text-[11px] pt-1 text-slate-400 border-t border-slate-100 dark:border-slate-800">
                     <span>{{ art.date }}</span>
                     <div class="flex items-center gap-2">
                       <button
                         @click.stop="toggleSaveArticle(art)"
                         :class="art.isSaved ? 'text-amber-500 font-bold' : 'hover:text-amber-500'"
-                        class="transition-colors"
+                        class="transition-colors cursor-pointer"
                         :title="art.isSaved ? 'Bỏ lưu' : 'Lưu bài đọc'"
                       >
                         <Icon :name="art.isSaved ? 'lucide:bookmark-check' : 'lucide:bookmark'" class="w-3.5 h-3.5" />
                       </button>
                       <button
                         @click.stop="deleteArticle(art.id)"
-                        class="hover:text-rose-500 transition-colors"
+                        class="hover:text-rose-500 transition-colors cursor-pointer"
                         title="Xóa bài đọc này"
                       >
                         <Icon name="lucide:trash-2" class="w-3.5 h-3.5" />
@@ -338,276 +442,259 @@ const handleScrapeNews = async () => {
 
           <!-- RIGHT COLUMN (8 Cols): Main Interactive Reader Workspace Panel -->
           <div class="lg:col-span-8 space-y-4">
-            <div v-if="selectedArticle" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 md:p-8 shadow-sm space-y-6 relative min-h-[520px]">
-
+            <div v-if="selectedArticle" class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 md:p-8 shadow-xs space-y-6 relative min-h-[520px]">
               <!-- Article Title & Toolbar Header -->
-              <div class="border-b border-slate-100 dark:border-slate-700 pb-5 space-y-3">
+              <div class="border-b border-slate-100 dark:border-slate-800 pb-5 space-y-3">
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
-                    <span class="px-2.5 py-0.5 bg-primary-100 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 font-extrabold text-xs rounded-lg">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 font-extrabold text-xs rounded-lg">
                       Trình độ {{ selectedArticle.level }}
                     </span>
-                    <span v-if="selectedArticle.sourceName" class="text-xs font-semibold text-slate-400 flex items-center gap-1">
-                      <Icon name="lucide:globe" class="w-3.5 h-3.5" />
+                    <span v-if="selectedArticle.sourceName" class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold text-xs rounded-lg">
                       {{ selectedArticle.sourceName }}
                     </span>
-                    <span class="text-xs font-medium text-slate-400">• Đăng ngày {{ selectedArticle.date }}</span>
+                    <span class="text-xs font-medium text-slate-400">• {{ selectedArticle.date }}</span>
                   </div>
 
                   <!-- Toolbar Buttons -->
                   <div class="flex items-center gap-2">
+                    <a
+                      v-if="selectedArticle.sourceUrl"
+                      :href="selectedArticle.sourceUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors"
+                      title="Xem bài gốc trên trang báo"
+                    >
+                      <Icon name="lucide:external-link" class="w-4 h-4 text-primary-500" />
+                      <span>Xem bài gốc</span>
+                    </a>
+
                     <button
                       @click="toggleSaveArticle(selectedArticle)"
-                      :class="selectedArticle.isSaved ? 'bg-amber-500 text-white shadow-amber-500/20' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-slate-600'"
-                      class="px-3 py-1.5 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                      :class="selectedArticle.isSaved ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200'"
+                      class="px-3 py-1.5 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Icon :name="selectedArticle.isSaved ? 'lucide:bookmark-check' : 'lucide:bookmark'" class="w-4 h-4" />
-                      <span>{{ selectedArticle.isSaved ? 'Đã lưu bài' : 'Lưu bài đọc' }}</span>
+                      <span>{{ selectedArticle.isSaved ? 'Đã lưu' : 'Lưu bài' }}</span>
                     </button>
 
                     <button
                       @click="speakCurrentArticle"
-                      class="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                      title="Nghe toàn bộ phát âm bài báo"
+                      class="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Icon name="lucide:volume-2" class="w-4 h-4" />
-                      <span>Phát âm bài báo</span>
-                    </button>
-
-                    <button
-                      @click="deleteArticle(selectedArticle.id)"
-                      class="px-2.5 py-1.5 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                      title="Xóa bài đọc"
-                    >
-                      <Icon name="lucide:trash-2" class="w-3.5 h-3.5" />
-                      <span>Xóa</span>
+                      <span>Phát âm bài</span>
                     </button>
                   </div>
                 </div>
 
-                <h2 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-snug">
+                <h2 class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white leading-snug">
                   {{ selectedArticle.title }}
                 </h2>
-
-                <p v-if="selectedArticle.summary" class="text-xs text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/60">
-                  💡 {{ selectedArticle.summary }}
-                </p>
               </div>
 
-              <!-- Interactive Words Reading Panel (Left Aligned, Clear Spacing) -->
+              <!-- Interactive Paragraphs & Words Reading Panel -->
               <div class="space-y-4">
-                <div class="flex items-center justify-between text-xs text-slate-400 font-bold">
-                  <span>Nội dung bài viết (Bấm vào từ bất kỳ để nghe &amp; tra từ):</span>
-                  <a
-                    v-if="selectedArticle.sourceUrl"
-                    :href="selectedArticle.sourceUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-primary-500 hover:underline flex items-center gap-1"
-                  >
-                    <Icon name="lucide:external-link" class="w-3.5 h-3.5" />
-                    <span>Xem bài báo gốc</span>
-                  </a>
-                </div>
-
-                <div class="text-base md:text-lg font-medium leading-relaxed text-slate-800 dark:text-slate-200 flex flex-wrap gap-2 pt-1 text-left">
-                  <span
-                    v-for="(w, idx) in wordsList"
-                    :key="idx"
-                    @click="handleWordClick(w)"
-                    class="hover:bg-primary-100 dark:hover:bg-primary-950/60 hover:text-primary-800 dark:hover:text-primary-300 px-1.5 py-0.5 rounded-md cursor-pointer transition-colors border-b-2 border-dotted border-slate-300 dark:border-slate-600"
-                  >
-                    {{ w }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- SRS Saved Status Bar -->
-              <div v-if="savedWords.length" class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-400 uppercase">Từ đã lưu ôn tập SRS:</span>
-                <div class="flex flex-wrap gap-2">
-                  <span v-for="sw in savedWords" :key="sw" class="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs rounded-lg flex items-center gap-1.5">
-                    <Icon name="lucide:bookmark" class="w-3.5 h-3.5 fill-current" />
-                    <span>{{ sw }}</span>
-                  </span>
-                </div>
-              </div>
-
-              <!-- Word Lookup Popup Modal -->
-              <div v-if="activeWord" class="absolute inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 rounded-2xl z-20">
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4 text-center animate-in fade-in zoom-in duration-150">
-                  <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
-                    <span class="text-xs font-bold text-slate-400 uppercase">Tra từ &amp; Nghe âm</span>
-                    <button @click="speakText(activeWord, 'de-DE')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-primary-500 cursor-pointer">
-                      <Icon name="lucide:volume-2" class="w-5 h-5" />
+                <!-- Word Lookup Popover Card -->
+                <div
+                  v-if="activeWord"
+                  class="bg-emerald-500 text-white p-4 rounded-2xl shadow-lg border border-emerald-400 space-y-2 animate-fadeIn transition-all"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg font-extrabold">{{ activeWord }}</span>
+                      <button @click="speakText(activeWord, speechLangCode)" class="p-1 hover:bg-emerald-600 rounded-lg cursor-pointer">
+                        <Icon name="lucide:volume-2" class="w-4 h-4 text-white" />
+                      </button>
+                    </div>
+                    <button @click="activeWord = null" class="p-1 hover:bg-emerald-600 rounded-lg cursor-pointer">
+                      <Icon name="lucide:x" class="w-4 h-4 text-white" />
                     </button>
                   </div>
 
-                  <h3 class="text-3xl font-black text-primary-600 dark:text-primary-400 tracking-wide">{{ activeWord }}</h3>
-
-                  <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl min-h-[60px] flex items-center justify-center">
-                    <p v-if="isLookingUpWord" class="text-xs text-slate-400 animate-pulse flex items-center gap-2">
-                      <Icon name="lucide:loader-2" class="w-4 h-4 animate-spin" />
-                      <span>Đang tra từ điển...</span>
-                    </p>
-                    <p v-else class="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      {{ wordMeaning || 'Từ vựng tiếng Đức' }}
-                    </p>
+                  <div class="text-xs font-semibold text-emerald-50">
+                    <span v-if="isLookingUpWord" class="italic flex items-center gap-1.5">
+                      <Icon name="lucide:loader-2" class="w-3.5 h-3.5 animate-spin" />
+                      Đang tra từ điển...
+                    </span>
+                    <span v-else>{{ wordMeaning || 'Đang cập nhật nghĩa từ vựng' }}</span>
                   </div>
 
-                  <div class="flex gap-3 pt-2">
-                    <button
-                      @click="activeWord = null"
-                      class="flex-1 py-2.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                    >
-                      Đóng
-                    </button>
+                  <div class="pt-2 flex items-center justify-end gap-2">
                     <button
                       @click="saveToSRS(activeWord)"
-                      class="flex-1 py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      :disabled="savedWords.includes(activeWord)"
+                      class="px-3 py-1.5 bg-white text-emerald-700 font-extrabold rounded-xl text-xs flex items-center gap-1.5 hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer shadow-2xs"
                     >
-                      <Icon name="lucide:zap" class="w-4 h-4 fill-current" />
-                      <span>Lưu SRS</span>
+                      <Icon :name="savedWords.includes(activeWord) ? 'lucide:check' : 'lucide:bookmark-plus'" class="w-3.5 h-3.5" />
+                      <span>{{ savedWords.includes(activeWord) ? 'Đã lưu SRS' : 'Lưu vào Ôn tập SRS' }}</span>
                     </button>
                   </div>
                 </div>
+
+                <template v-for="(paraWords, pIdx) in articleParagraphs" :key="pIdx">
+                  <!-- Render Heading (###) -->
+                  <div
+                    v-if="paraWords[0] && paraWords[0].startsWith('###')"
+                    class="w-full pt-4 pb-1 text-xl md:text-2xl font-black text-emerald-800 dark:text-emerald-400 border-b border-emerald-500/20 flex flex-wrap gap-x-2 gap-y-1 text-left"
+                  >
+                    <span
+                      v-for="(w, idx) in paraWords"
+                      :key="idx"
+                      @click="handleWordClick(w.replace(/^###\s*/, ''))"
+                      :class="activeWord && cleanWordStr(w) === activeWord ? 'bg-emerald-500 text-white rounded px-1' : 'hover:bg-emerald-100 dark:hover:bg-emerald-900/80 hover:text-emerald-600 dark:hover:text-emerald-300 border-b border-dotted border-emerald-400/50'"
+                      class="py-0.5 rounded cursor-pointer transition-colors font-black tracking-tight"
+                    >
+                      {{ idx === 0 ? w.replace(/^###\s*/, '') : w }}
+                    </span>
+                  </div>
+
+                  <!-- Render Regular Paragraph -->
+                  <div
+                    v-else
+                    class="text-base md:text-lg font-normal leading-relaxed text-slate-800 dark:text-slate-200 flex flex-wrap gap-x-1.5 gap-y-1 text-left pb-3"
+                  >
+                    <span
+                      v-for="(w, idx) in paraWords"
+                      :key="idx"
+                      @click="handleWordClick(w)"
+                      :class="activeWord && cleanWordStr(w) === activeWord ? 'bg-emerald-500 text-white rounded' : 'hover:bg-emerald-100 dark:hover:bg-emerald-900/80 hover:text-primary-600 dark:hover:text-primary-400 border-b border-dotted border-slate-300 dark:border-slate-700'"
+                      class="px-1 py-0.5 rounded cursor-pointer transition-colors font-medium"
+                    >
+                      {{ w }}
+                    </span>
+                  </div>
+                </template>
               </div>
             </div>
-
-            <div v-else class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-12 text-center text-slate-400 space-y-3">
-              <Icon name="lucide:newspaper" class="w-10 h-10 mx-auto text-slate-300" />
-              <p class="text-sm font-semibold">Chọn một bài báo bên danh sách bên trái để bắt đầu luyện đọc.</p>
-            </div>
           </div>
-
         </div>
-
       </div>
     </LayoutPageSection>
 
     <!-- News Scraper Modal -->
-    <div v-if="isScrapeModalOpen" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in fade-in zoom-in duration-200">
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4">
-          <div class="flex items-center gap-2.5">
-            <div class="p-2.5 bg-primary-500/10 text-primary-500 rounded-2xl">
-              <Icon name="lucide:bot" class="w-6 h-6" />
-            </div>
-            <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Cào Tin Tức Tiếng Đức</h3>
-              <p class="text-xs text-slate-400 font-medium">Tự chọn số bài &amp; nguồn báo tiếng Đức (Tối đa 5 bài)</p>
-            </div>
-          </div>
-          <button @click="isScrapeModalOpen = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl">
+    <div v-if="isScrapeModalOpen" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-lg space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+          <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Cào Tin Tức {{ languageLabel }}</h3>
+          <button @click="isScrapeModalOpen = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl cursor-pointer">
             <Icon name="lucide:x" class="w-5 h-5" />
           </button>
         </div>
 
-        <!-- Mode Selector -->
-        <div class="grid grid-cols-2 gap-3 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl text-xs font-extrabold">
-          <button
-            @click="scrapeMode = 'rss'"
-            :class="scrapeMode === 'rss' ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'"
-            class="py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-          >
-            <Icon name="lucide:rss" class="w-4 h-4" />
-            <span>Tự động qua RSS Báo Đức</span>
-          </button>
-          <button
-            @click="scrapeMode = 'url'"
-            :class="scrapeMode === 'url' ? 'bg-white dark:bg-slate-800 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'"
-            class="py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-          >
-            <Icon name="lucide:link" class="w-4 h-4" />
-            <span>Nhập 1 URL cụ thể</span>
-          </button>
-        </div>
-
-        <!-- RSS Options: Source & Article Count Selection -->
-        <div v-if="scrapeMode === 'rss'" class="space-y-4">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              Chọn Nguồn Báo Tiếng Đức:
-            </label>
-            <select
-              v-model="selectedSource"
-              class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+        <div class="space-y-4">
+          <!-- Scrape Mode Toggle (RSS / Custom URL) -->
+          <div class="grid grid-cols-2 gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold">
+            <button
+              @click="scrapeMode = 'rss'"
+              :class="scrapeMode === 'rss' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <option value="all">🌐 Tất cả nguồn (Tagesschau &amp; Deutsche Welle)</option>
-              <option value="tagesschau">📺 Tagesschau (Tin tức thời sự Đức)</option>
-              <option value="dw">🌍 Deutsche Welle (Báo quốc tế tiếng Đức)</option>
-            </select>
+              <Icon name="lucide:rss" class="w-4 h-4" />
+              <span>Nguồn báo RSS</span>
+            </button>
+            <button
+              @click="scrapeMode = 'url'"
+              :class="scrapeMode === 'url' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+              class="py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Icon name="lucide:link" class="w-4 h-4" />
+              <span>Dán URL bài báo</span>
+            </button>
           </div>
 
-          <div>
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              Số lượng bài báo muốn cào (Tối đa 5 bài):
-            </label>
-            <div class="grid grid-cols-5 gap-2">
-              <button
-                v-for="num in [1, 2, 3, 4, 5]"
-                :key="num"
-                @click="scrapeCount = num"
-                :class="scrapeCount === num ? 'bg-primary-500 text-white font-extrabold ring-2 ring-primary-500/30' : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200'"
-                class="py-2.5 rounded-xl text-sm transition-all"
+          <!-- RSS Mode Controls -->
+          <div v-if="scrapeMode === 'rss'" class="space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Chọn nguồn báo {{ languageLabel }}:
+              </label>
+              <select
+                v-model="selectedSource"
+                class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-primary-500"
               >
-                {{ num }} bài
-              </button>
+                <option v-for="src in availableRssSources" :key="src.key" :value="src.key">
+                  {{ src.name }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Số lượng bài báo muốn cào:
+              </label>
+              <div class="grid grid-cols-5 gap-2">
+                <button
+                  v-for="num in [1, 2, 3, 4, 5]"
+                  :key="num"
+                  @click="scrapeCount = num"
+                  :class="scrapeCount === num ? 'bg-primary-500 text-white font-extrabold' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'"
+                  class="py-2.5 rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  {{ num }} bài
+                </button>
+              </div>
             </div>
           </div>
+
+          <!-- URL Mode Input -->
+          <div v-else class="space-y-2">
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+              Nhập liên kết bài báo {{ languageLabel }}:
+            </label>
+            <input
+              v-model="inputUrl"
+              type="url"
+              placeholder="https://..."
+              class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-primary-500 transition-all"
+            />
+          </div>
+
+          <!-- Alert Messages -->
+          <div v-if="scrapeError" class="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-600 dark:text-rose-400 font-bold">
+            {{ scrapeError }}
+          </div>
+          <div v-if="scrapeSuccessMsg" class="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+            {{ scrapeSuccessMsg }}
+          </div>
         </div>
 
-        <!-- URL Input Mode -->
-        <div v-else class="space-y-2">
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-            Đường dẫn URL bài báo tiếng Đức:
-          </label>
-          <input
-            v-model="inputUrl"
-            type="url"
-            placeholder="https://www.tagesschau.de/ausland/europa/..."
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-
-        <!-- Info Note -->
-        <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3.5 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-          <Icon name="lucide:info" class="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-          <p class="leading-relaxed">
-            Các bài cào về sẽ xuất hiện ở **danh sách bài đọc tạm thời**. Bạn có thể bấm **"Lưu bài"** nếu muốn học kỹ hoặc bấm **"Xóa bài"** bất kỳ lúc nào!
-          </p>
-        </div>
-
-        <!-- Notifications -->
-        <div v-if="scrapeError" class="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-2">
-          <Icon name="lucide:alert-triangle" class="w-4 h-4 shrink-0" />
-          <span>{{ scrapeError }}</span>
-        </div>
-
-        <div v-if="scrapeSuccessMsg" class="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-          <Icon name="lucide:check-circle-2" class="w-4 h-4 shrink-0" />
-          <span>{{ scrapeSuccessMsg }}</span>
-        </div>
-
-        <!-- Action Buttons -->
         <div class="flex items-center gap-3 pt-2">
           <button
             @click="isScrapeModalOpen = false"
-            class="flex-1 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-2xl text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            class="flex-1 py-3 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >
             Hủy
           </button>
           <button
             @click="handleScrapeNews"
-            :disabled="isScraping || (scrapeMode === 'url' && !inputUrl.trim())"
-            class="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-extrabold rounded-2xl text-sm shadow-md shadow-primary-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            :disabled="isScraping"
+            class="flex-1 py-3 bg-primary-500 hover:bg-primary-600 text-white font-extrabold rounded-xl text-xs shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
           >
-            <Icon v-if="isScraping" name="lucide:loader-2" class="w-4 h-4 animate-spin" />
-            <Icon v-else name="lucide:play" class="w-4 h-4 fill-current" />
-            <span>{{ isScraping ? 'Đang cào...' : `Bắt đầu Cào ${scrapeMode === 'rss' ? scrapeCount : 1} Bài` }}</span>
+            <span>{{ isScraping ? 'Đang cào...' : 'Bắt đầu Cào Bài' }}</span>
           </button>
         </div>
       </div>
+    </div>
+    <div
+      v-if="newsToastText"
+      class="fixed bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
+      style="box-shadow: 0 15px 35px -5px rgba(16, 185, 129, 0.4);"
+    >
+      <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md">
+        <Icon name="carbon:checkmark-outline" class="w-6 h-6 text-white" />
+      </div>
+      <div class="flex flex-col pr-3">
+        <span class="text-base text-emerald-400 font-extrabold">{{ newsToastText }}</span>
+        <span class="text-xs font-semibold text-slate-300">Đã cập nhật danh sách ôn tập SRS</span>
+      </div>
+      <button
+        @click="newsToastText = ''"
+        class="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors"
+      >
+        <Icon name="carbon:close" class="w-5 h-5" />
+      </button>
     </div>
   </LayoutPageWrapper>
 </template>

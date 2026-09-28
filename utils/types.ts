@@ -38,10 +38,30 @@ export interface WordTopic {
   wordId: string
   topicId: string
 }
+export interface QuizChoice {
+  id?: string
+  index: number
+  text: string
+  isCorrect: boolean
+}
+
+export type QuizQuestionType =
+  | 'multiple_choice'
+  | 'sentence_builder'
+  | 'dictation'
+  | 'typed_recall'
+  | 'cloze'
+
 export interface QuizQuestion {
-  question: string
-  answers: string[]
-  correctAnswerIndex: number
+  id?: string
+  text: string
+  type: QuizQuestionType | string
+  level?: string | null
+  audioUrl?: string | null
+  targetSentence?: string | null
+  solution?: string | null
+  scrambleWords?: string[]
+  choices?: QuizChoice[]
 }
 
 export interface UserWordProgress {
@@ -56,6 +76,29 @@ export interface UserWordProgress {
   isMastered: boolean
   masteryLevel: number
   streak: number
+}
+
+/** Personal notebook entry (not the shared dictionary catalog) */
+export interface UserVocabularyEntry {
+  id: string
+  userId: string
+  wordId?: string | null
+  word: string
+  meaning: string
+  note?: string | null
+  language: string
+  level?: string | null
+  type?: string | null
+  example?: string | null
+  source: 'dictionary' | 'manual' | string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  vocabularyWord?: {
+    id: string
+    pronunciation?: string | null
+    audioUrl?: string | null
+    transcription?: string | null
+  } | null
 }
 
 export interface AwesomeLayoutPageNavbarMenuDropdownItem {

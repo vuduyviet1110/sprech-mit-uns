@@ -1,18 +1,15 @@
-import { defineEventHandler, getRouterParams, getQuery, createError } from 'h3'
+import { defineEventHandler, getRouterParams, createError } from 'h3'
 import { getTopicDetails } from '~/server/handlers/getTopicsByLevel'
+import { requireUserId } from '~/server/utils/user'
 
 export default defineEventHandler(async (event) => {
   const method = event.node.req.method
   const { id } = getRouterParams(event)
-  const { userId } = getQuery(event)
-
-  if (!userId) {
-    throw createError({ statusCode: 401, message: 'User ID is required' })
-  }
+  const userId = await requireUserId(event)
 
   if (method === 'GET') {
     try {
-      return await getTopicDetails(id, userId as string)
+      return await getTopicDetails(id, userId)
     } catch (error: any) {
       console.error('Error in getTopicDetails:', error)
       throw createError({ statusCode: 500, message: error.message || 'Internal server error' })

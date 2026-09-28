@@ -53,7 +53,7 @@ useHead({
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 hover:border-primary-500/50 transition-all">
-              <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-500 flex items-center justify-center mb-4">
+              <div class="w-12 h-12 rounded-xl bg-primary-100 dark:bg-primary-950/60 text-primary-500 flex items-center justify-center mb-4">
                 <Icon name="uil:trophy" class="w-6 h-6" />
               </div>
               <h4 class="text-lg font-bold text-slate-900 dark:text-white mb-2">Thử thách Quiz</h4>
@@ -79,5 +79,14 @@ useHead({
         </div>
       </div>
     </LayoutPageSection>
+
+    <!-- Sample Interactive Flashcards Demo -->
+    <LayoutPageSectionFlashCardSection
+      :flashcards="[
+        { id: '1', word: 'Hallo', meaning: 'Xin chào', pronunciation: '/haˈloː/', language: 'de', difficulty: 'easy', type: 'Thán từ', synonyms: [], antonyms: [], topics: ['General'] },
+        { id: '2', word: 'Děkuji', meaning: 'Cảm ơn', pronunciation: '/ɟɛkujɪ/', language: 'cs', difficulty: 'easy', type: 'Thán từ', synonyms: [], antonyms: [], topics: ['General'] },
+        { id: '3', word: 'Lernen', meaning: 'Học tập', pronunciation: '/ˈlɛʁnən/', language: 'de', difficulty: 'medium', type: 'Động từ', synonyms: [], antonyms: [], topics: ['Education'] }
+      ]"
+    />
   </LayoutPageWrapper>
 </template>

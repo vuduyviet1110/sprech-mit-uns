@@ -76,6 +76,28 @@ export default <Partial<Config>>{
       fontFamily: {
         sans: ['Nunito', ...defaultTheme.fontFamily.sans],
       },
+      keyframes: {
+        'float-y': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        'float-y-delay': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-6px)' },
+        },
+        'pulse-soft': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.55' },
+        },
+      },
+      animation: {
+        'float-y': 'float-y 4.5s ease-in-out infinite',
+        'float-y-delay': 'float-y-delay 5.5s ease-in-out infinite 0.6s',
+        'pulse-soft': 'pulse-soft 2.4s ease-in-out infinite',
+      },
+      scale: {
+        '102': '1.02',
+      },
     },
   },
 }
