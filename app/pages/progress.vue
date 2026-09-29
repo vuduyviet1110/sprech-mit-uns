@@ -50,11 +50,17 @@ function handleBackToTopics() {
 
 async function handleResetProgress() {
   if (typeof window !== 'undefined' && window.confirm('Bạn có chắc chắn muốn xóa toàn bộ tiến độ học tập để bắt đầu lại từ đầu?')) {
+    // Mọi key mang tiến độ học. Thiếu key nào thì "xoá toàn bộ" sẽ để sót dữ liệu
+    // và người dùng thấy tiến độ cũ quay lại.
     const keysToRemove = [
       'daily_path_v1',
       'daily_quests_v2',
       'daily_quests_v1',
       'app_learning_settings_v1',
+      'pronunciation_drill_v1',
+      'sprech_saved_news_articles',
+      'german_learning_progress',
+      'speed_quiz_high_score',
     ]
     for (const k of keysToRemove) localStorage.removeItem(k)
     // Clear per-user word progress keys

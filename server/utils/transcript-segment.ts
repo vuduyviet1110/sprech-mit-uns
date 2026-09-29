@@ -235,24 +235,3 @@ export function buildHint(text: string): string {
     )
     .join(' ')
 }
-
-/** Chọn vài từ dài làm từ vựng gợi ý (heuristic đơn giản, không tra từ điển). */
-export function pickVocabularies(
-  text: string,
-): Array<{ word: string; type: string; meaning: string }> {
-  const words = (text || '').split(/\s+/).filter(Boolean)
-  const keyWords = Array.from(
-    new Set(
-      words
-        .filter((w) => w.length >= 4)
-        .map((w) => w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'„“]/g, ''))
-        .filter((w) => w.length >= 4),
-    ),
-  ).slice(0, 3)
-
-  return keyWords.map((word) => ({
-    word,
-    type: word[0] === word[0]!.toUpperCase() ? 'Noun / Word' : 'Verb / Word',
-    meaning: 'Từ vựng trong đoạn thoại',
-  }))
-}

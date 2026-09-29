@@ -43,6 +43,26 @@ pnpm docker:up         # chạy image đã build
 pnpm docker:up:build   # build + chạy một lệnh
 ```
 
+### Sự cố build thường gặp
+
+**`Nuxt Build Error: Entry module "…/nuxt/dist/app/entry.js" cannot be external`**
+
+`node_modules` còn sót bản `@nuxt/vite-builder` cũ ở tầng hoisted, lệch với `nuxt` mà
+lockfile ghim. `pnpm install --frozen-lockfile` không dọn được, phải xoá tay:
+
+```bash
+rm -rf node_modules app/node_modules app/.nuxt .nuxt app/.output .output
+pnpm install --frozen-lockfile
+npx prisma generate   # clean install không tự chạy — thiếu bước này build báo lỗi PrismaClient
+node -p "require('./node_modules/@nuxt/vite-builder/package.json').version"  # phải khớp nuxt
+```
+
+**`Named export 'PrismaClient' not found`** — chưa chạy `npx prisma generate` sau khi cài lại.
+
+> `.npmrc` giữ `shamefully-hoist=true`: `package.json` không khai báo `vue`, `vite`, `h3`,
+> `autoprefixer`, trong khi `nuxt.config.ts` và 35 file trong `server/` import chúng trực tiếp.
+> Gỡ cờ này là repo gãy.
+
 ## Tính năng chính
 
 - Lộ trình hôm nay (SRS → Shadowing → Active Recall) + bài tiếp theo theo curriculum

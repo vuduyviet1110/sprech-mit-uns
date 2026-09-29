@@ -96,4 +96,21 @@ describe('session-scoped learning APIs (policy)', () => {
     // Tiến độ/mở khoá phải do server suy ra, không nhận trực tiếp từ body client
     expect(dictationPost).not.toMatch(/clipsDone\s*[:=]\s*(body|Number\(body)/)
   })
+
+  it('youtube parse không được im lặng rơi về video mặc định', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const root = resolve(__dirname, '../..')
+    const parseApi = readFileSync(
+      resolve(root, 'server/api/youtube/parse.get.ts'),
+      'utf8',
+    )
+
+    expect(parseApi).toContain('extractYoutubeId')
+    // URL sai phải ném lỗi, không được thay bằng một video có sẵn
+    expect(parseApi).not.toMatch(/3iV2WK1/)
+    expect(parseApi).toMatch(/statusCode:\s*400/)
+    // Client cần biết khi phụ đề không đúng ngôn ngữ đang học
+    expect(parseApi).toContain('languageFallback')
+  })
 })

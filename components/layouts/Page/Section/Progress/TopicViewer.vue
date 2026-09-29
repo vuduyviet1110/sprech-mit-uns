@@ -72,7 +72,27 @@
         </Button>
       </div>
 
-      <Transition name="fade-slide" mode="out-in">
+      <div
+        v-if="currentView === 'flashcards' && !hasWords"
+        class="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800"
+      >
+        <Icon
+          :name="isLoadingWords ? 'lucide:loader-2' : 'lucide:book-x'"
+          :class="[
+            'w-8 h-8 mx-auto text-slate-400',
+            isLoadingWords ? 'animate-spin' : '',
+          ]"
+        />
+        <p class="mt-3 text-sm font-bold text-slate-600 dark:text-slate-300">
+          {{
+            isLoadingWords
+              ? 'Đang tải từ vựng của bài học...'
+              : 'Bài học này chưa có từ vựng để luyện thẻ.'
+          }}
+        </p>
+      </div>
+
+      <Transition v-else name="fade-slide" mode="out-in">
         <component
           :is="getCurrentComponent()"
           :key="currentView"
@@ -80,7 +100,8 @@
           v-model:showTranslation="showTranslation"
           :topicId="topic.id"
           :paragraph="topic.paragraph"
-          :flashcards="demoFlashcards"
+          :flashcards="topicWords"
+          :deck-key="topic.slug || topic.id"
         />
       </Transition>
     </div>
@@ -88,19 +109,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, resolveComponent } from 'vue'
+import { computed, ref, resolveComponent, watch } from 'vue'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
-import { demoFlashcards } from '~/mock-data'
 import type { VocabularyWord } from '~/utils/types'
 
 const props = defineProps<{
   topic: {
     id: string
+    slug?: string | null
     title: string
     paragraph: string
     difficulty: string
     englishTranslation: string
+    words?: VocabularyWord[]
   } & VocabularyWord
 }>()
 
@@ -108,6 +130,39 @@ defineEmits(['back'])
 
 const currentView = ref<'reading' | 'vocabulary' | 'flashcards'>('reading')
 const showTranslation = ref(false)
+
+// Từ vựng thật của bài. Trước đây chỗ này truyền `demoFlashcards` từ `~/mock-data`
+// mà không kèm prop `demo`, nên lật thẻ giả (nghĩa tiếng Anh) sẽ POST
+// /api/progress/word với wordId bịa và ghi thẳng vào UserWordProgress.
+const topicWords = ref<VocabularyWord[]>(props.topic.words ?? [])
+const isLoadingWords = ref(false)
+
+const loadTopicWords = async () => {
+  if (topicWords.value.length || !props.topic.slug) return
+  isLoadingWords.value = true
+  try {
+    const res: any = await $fetch(`/api/topics/${props.topic.slug}`)
+    topicWords.value = Array.isArray(res?.words)
+      ? res.words.filter((w: any) => w?.id && w?.word)
+      : []
+  } catch (err) {
+    console.warn('Không tải được từ vựng của bài học:', err)
+    topicWords.value = []
+  } finally {
+    isLoadingWords.value = false
+  }
+}
+
+watch(
+  () => props.topic.id,
+  () => {
+    topicWords.value = props.topic.words ?? []
+    loadTopicWords()
+  },
+  { immediate: true },
+)
+
+const hasWords = computed(() => topicWords.value.length > 0)
 
 const getCurrentComponent = () => {
   switch (currentView.value) {

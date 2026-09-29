@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { assertRateLimit, clientIp } from '~/server/utils/rate-limit'
 import { requireUserId } from '~/server/utils/user'
+import { feedsForLanguage } from '~/utils/news-sources'
 
 interface ScrapedArticle {
   id: string
@@ -283,20 +284,12 @@ async function scrapeSingleUrl(targetUrl: string, lang = 'de'): Promise<ScrapedA
 }
 
 async function scrapeRssFeeds(lang = 'de', source = 'all', count = 3): Promise<ScrapedArticle[]> {
-  const germanFeeds = [
-    { key: 'tagesschau', name: 'Tagesschau', url: 'https://www.tagesschau.de/xml/rss2/' },
-    { key: 'dw', name: 'Deutsche Welle', url: 'https://rss.dw.com/xml/rss-de-all' },
-  ]
+  const allRss = feedsForLanguage(lang)
 
-  const czechFeeds = [
-    { key: 'irozhlas', name: 'iROZHLAS', url: 'https://www.irozhlas.cz/rss/irozhlas' },
-    { key: 'ct24', name: 'ČT24', url: 'https://ct24.ceskatelevize.cz/rss/main' },
-    { key: 'idnes', name: 'iDNES.cz', url: 'https://servis.idnes.cz/rss.aspx' },
-  ]
-
-  const allRss = lang === 'cs' ? czechFeeds : germanFeeds
-
-  const selectedFeeds = source === 'all' ? allRss : allRss.filter((f) => f.key === source)
+  const picked = source === 'all' ? allRss : allRss.filter((f) => f.key === source)
+  // `source` đến từ body client. Key lạ (client cũ còn giữ nguồn đã gỡ, hoặc gõ tay)
+  // từng cho ra 0 feed rồi ném 500 "không cào được" — sai bản chất. Quay về tất cả nguồn.
+  const selectedFeeds = picked.length > 0 ? picked : allRss
   const limitCount = Math.min(Math.max(1, count), 5)
 
   const scrapedArticles: ScrapedArticle[] = []

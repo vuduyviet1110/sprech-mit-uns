@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { prisma } from '~/server/ultis/prisma'
 import { assertRateLimit, clientIp } from '~/server/utils/rate-limit'
 import { requireUserId } from '~/server/utils/user'
+import { extractYoutubeId } from '~/utils/youtube-url'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -18,10 +19,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const match = url.match(
-      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/,
-    )
-    const youtubeId = match && match[1] ? match[1] : ''
+    const youtubeId = extractYoutubeId(url)
 
     if (!youtubeId) {
       throw createError({

@@ -22,9 +22,10 @@ const props = defineProps<{
   maxUnlockedIdx: number
   clipStates: Record<string, ClipState>
   totalSegments?: number
+  isLoadingMore?: boolean
 }>()
 
-const emit = defineEmits<{ select: [index: number] }>()
+const emit = defineEmits<{ select: [index: number]; loadMore: [] }>()
 
 const listEl = ref<HTMLElement | null>(null)
 
@@ -32,9 +33,18 @@ const doneCount = computed(
   () => Object.values(props.clipStates).filter((s) => s.done).length,
 )
 
+// Mẫu số là tổng câu của cả video: `clipStates` chứa mọi câu đã làm (server trả
+// nguyên map), nên chia cho số câu đang tải sẽ cho ra những con số như 100/60.
+const totalCount = computed(
+  () => props.totalSegments || props.clips.length || 0,
+)
+
 const percent = computed(() => {
-  if (!props.clips.length) return 0
-  return Math.round((doneCount.value / props.clips.length) * 100)
+  if (!totalCount.value) return 0
+  return Math.min(
+    100,
+    Math.round((doneCount.value / totalCount.value) * 100),
+  )
 })
 
 const formatTime = (seconds: number) => {
@@ -124,7 +134,7 @@ watch(
           <span>Danh Sách Câu</span>
         </span>
         <span class="text-[11px] font-extrabold text-primary-500">
-          {{ doneCount }}/{{ clips.length }}
+          {{ doneCount }}/{{ totalCount }}
         </span>
       </div>
 
@@ -141,7 +151,7 @@ watch(
         v-if="totalSegments && totalSegments > clips.length"
         class="text-[10px] text-slate-400 italic"
       >
-        Đang luyện {{ clips.length }}/{{ totalSegments }} câu của video
+        Đã tải {{ clips.length }}/{{ totalSegments }} câu của video
       </p>
     </div>
 
@@ -189,6 +199,20 @@ watch(
             {{ clip.wordCount ? `${clip.wordCount} từ` : 'Chưa luyện' }}
           </p>
         </div>
+      </button>
+
+      <button
+        v-if="totalSegments && totalSegments > clips.length"
+        type="button"
+        :disabled="isLoadingMore"
+        class="w-full p-2.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-[11px] font-extrabold text-primary-500 hover:border-primary-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+        @click="emit('loadMore')"
+      >
+        <Icon
+          :name="isLoadingMore ? 'lucide:loader-2' : 'lucide:plus-circle'"
+          :class="['w-4 h-4', isLoadingMore ? 'animate-spin' : '']"
+        />
+        <span>{{ isLoadingMore ? 'Đang tải...' : 'Tải thêm câu' }}</span>
       </button>
     </div>
   </div>

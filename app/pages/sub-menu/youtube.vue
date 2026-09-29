@@ -4,6 +4,7 @@ import { useLanguage } from '~/composables/use-language'
 import { buildShadowingReport } from '~/utils/shadowing-score'
 import type { DiffKind, ShadowingScoreReport } from '~/utils/shadowing-score'
 import LessonDictationClipList from '~/components/lesson/DictationClipList.vue'
+import { extractYoutubeId } from '~/utils/youtube-url'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: 'YouTube Dictation Lab - Sprech Mit Uns' })
@@ -62,11 +63,16 @@ const myLessons = ref<any[]>([])
 
 const clips = ref<any[]>([])
 const totalSegments = ref(0)
+/** Chỉ số segment toàn cục của clip đầu tiên trong cửa sổ đang tải. */
+const clipOffset = ref(0)
+const isLoadingMore = ref(false)
 const currentClipIdx = ref(0)
 const youtubeUrl = ref('')
 const inputUrl = ref('')
 const isLoadingParse = ref(false)
 const errorMessage = ref('')
+/** Cảnh báo phụ đề khác ngôn ngữ đang học. Thuộc về video, không reset theo câu. */
+const languageNotice = ref('')
 const isSaved = ref(false)
 
 const currentClip = computed(
@@ -76,14 +82,10 @@ const clipText = (clip: any) => clip?.text || clip?.germanText || ''
 
 const currentYoutubeId = computed(() => {
   if (currentClip.value?.youtubeId) return currentClip.value.youtubeId
-  const match = youtubeUrl.value.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/,
+  return (
+    extractYoutubeId(youtubeUrl.value) ||
+    (currentLanguage.value === 'cs' ? '9-4SJ_1Ypv0' : '3iV2WK1-IV8')
   )
-  return match && match[1]
-    ? match[1]
-    : currentLanguage.value === 'cs'
-      ? '9-4SJ_1Ypv0'
-      : '3iV2WK1-IV8'
 })
 
 // ---------------------------------------------------------------- Dictation state
@@ -245,14 +247,18 @@ const loadProgress = async (youtubeId: string) => {
     if (!p) return
 
     clipStates.value = (p.clipStates as Record<string, any>) || {}
-    maxUnlockedIdx.value = Math.min(
-      p.maxUnlockedIdx ?? 0,
-      Math.max(clips.value.length - 1, 0),
-    )
+    // Giữ nguyên giá trị server. Clamp về cửa sổ đang tải sẽ khoá lại những câu
+    // người dùng đã mở, và sau khi tải thêm chúng vẫn kẹt khoá.
+    maxUnlockedIdx.value = Math.max(p.maxUnlockedIdx ?? 0, 0)
 
+    // Câu đang học dở có thể nằm ngoài cửa sổ đầu tiên — tải tiếp cho tới khi
+    // chứa nó, thay vì âm thầm đưa người dùng về câu 0.
     const resume = p.lastClipIdx ?? 0
-    if (resume >= 0 && resume < clips.value.length) {
-      currentClipIdx.value = resume
+    if (resume > 0 && resume < totalSegments.value) {
+      while (resume >= clips.value.length && (await loadMoreClips())) {
+        /* tải tới khi đủ */
+      }
+      if (resume < clips.value.length) currentClipIdx.value = resume
     }
   } catch (err) {
     // Chưa đăng nhập hoặc DB lỗi: vẫn luyện được, chỉ là tiến độ không lưu.
@@ -279,9 +285,11 @@ const persistClipAttempt = async (score: number, done: boolean) => {
     },
   }
   if (done && idx >= maxUnlockedIdx.value) {
+    // Chặn theo tổng số câu của video, không theo cửa sổ đang tải — nếu không
+    // mở khoá dừng ở mép cửa sổ và không gì kích hoạt việc tải thêm.
     maxUnlockedIdx.value = Math.min(
       idx + 1,
-      Math.max(clips.value.length - 1, 0),
+      Math.max(totalSegments.value - 1, 0),
     )
   }
 
@@ -294,7 +302,8 @@ const persistClipAttempt = async (score: number, done: boolean) => {
         clipIdx: idx,
         score,
         done,
-        totalClips: clips.value.length,
+        // Tổng số câu thật của video, không phải kích thước cửa sổ đang tải.
+        totalClips: totalSegments.value || clips.value.length,
       },
     })
 
@@ -302,10 +311,7 @@ const persistClipAttempt = async (score: number, done: boolean) => {
     if (p) {
       clipStates.value =
         (p.clipStates as Record<string, any>) || clipStates.value
-      maxUnlockedIdx.value = Math.min(
-        p.maxUnlockedIdx ?? 0,
-        Math.max(clips.value.length - 1, 0),
-      )
+      maxUnlockedIdx.value = Math.max(p.maxUnlockedIdx ?? 0, 0)
     }
 
     // Chỉ cộng XP lần đầu hoàn thành đoạn này
@@ -325,11 +331,53 @@ const persistClipAttempt = async (score: number, done: boolean) => {
 }
 
 // ---------------------------------------------------------------- Parse
+const langName = (code: string) => (code === 'cs' ? 'tiếng Séc' : 'tiếng Đức')
+
+const hasMoreClips = computed(
+  () => totalSegments.value > clips.value.length,
+)
+
+/**
+ * Tải tiếp cửa sổ câu kế tiếp và nối vào `clips`. Chỉ nối liên tiếp, đúng thứ tự —
+ * nhờ vậy chỉ số mảng vẫn trùng chỉ số segment toàn cục, tức trùng khoá trong
+ * `clipStates`. Tải cửa sổ không liền mạch sẽ làm lệch toàn bộ tiến độ.
+ */
+const loadMoreClips = async (): Promise<boolean> => {
+  if (isLoadingMore.value || !hasMoreClips.value) return false
+  if (!youtubeUrl.value.trim()) return false
+
+  isLoadingMore.value = true
+  try {
+    const res: any = await $fetch('/api/youtube/parse', {
+      query: {
+        url: youtubeUrl.value.trim(),
+        language: currentLanguage.value,
+        offset: clips.value.length,
+      },
+    })
+
+    if (res?.success && Array.isArray(res.clips) && res.clips.length > 0) {
+      // Chốt chặn: chỉ nối khi server trả đúng cửa sổ mình xin.
+      if (res.offset !== clips.value.length) return false
+      clips.value = [...clips.value, ...res.clips]
+      totalSegments.value = res.totalSegments || totalSegments.value
+      return true
+    }
+    return false
+  } catch (err) {
+    console.warn('Không tải thêm được câu:', err)
+    return false
+  } finally {
+    isLoadingMore.value = false
+  }
+}
+
 const parseYoutubeLink = async () => {
   if (!inputUrl.value.trim()) return
 
   isLoadingParse.value = true
   errorMessage.value = ''
+  languageNotice.value = ''
   youtubeUrl.value = inputUrl.value
 
   try {
@@ -343,8 +391,12 @@ const parseYoutubeLink = async () => {
     if (res && res.success && res.clips && res.clips.length > 0) {
       clips.value = res.clips
       totalSegments.value = res.totalSegments || res.clips.length
+      clipOffset.value = res.offset || 0
       currentClipIdx.value = 0
       resetClipUi()
+      languageNotice.value = res.languageFallback
+        ? `Video này không có phụ đề ${langName(res.requestedLanguage)} — đang dùng phụ đề ${langName(res.language)}.`
+        : ''
       await loadProgress(res.youtubeId)
       pendingPlayerVideoId.value = res.youtubeId
     } else {
@@ -482,8 +534,13 @@ const selectClip = (index: number) => {
   resetClipUi()
 }
 
-const nextClip = () => {
-  if (currentClipIdx.value >= clips.value.length - 1) return
+const nextClip = async () => {
+  // Ở mép cửa sổ nhưng video còn câu: tải tiếp rồi mới đi tiếp.
+  if (currentClipIdx.value >= clips.value.length - 1) {
+    if (!hasMoreClips.value) return
+    const ok = await loadMoreClips()
+    if (!ok) return
+  }
   currentClipIdx.value++
   if (currentClipIdx.value > maxUnlockedIdx.value) {
     maxUnlockedIdx.value = currentClipIdx.value
@@ -491,8 +548,9 @@ const nextClip = () => {
   resetClipUi()
 }
 
+/** Câu cuối của cả video, không phải câu cuối của cửa sổ đang tải. */
 const isLastClip = computed(
-  () => currentClipIdx.value >= clips.value.length - 1,
+  () => currentClipIdx.value >= totalSegments.value - 1,
 )
 </script>
 
@@ -544,6 +602,26 @@ const isLastClip = computed(
             <button
               class="text-red-400 hover:text-red-600 p-1 cursor-pointer"
               @click="errorMessage = ''"
+            >
+              <Icon name="lucide:x" class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Phụ đề khác ngôn ngữ đang học: cảnh báo, không phải lỗi -->
+          <div
+            v-if="languageNotice"
+            class="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-xl flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-bold"
+          >
+            <div class="flex items-center gap-2">
+              <Icon
+                name="lucide:languages"
+                class="w-4 h-4 text-amber-500 shrink-0"
+              />
+              <span>{{ languageNotice }}</span>
+            </div>
+            <button
+              class="text-amber-400 hover:text-amber-600 p-1 cursor-pointer"
+              @click="languageNotice = ''"
             >
               <Icon name="lucide:x" class="w-4 h-4" />
             </button>
@@ -676,13 +754,18 @@ const isLastClip = computed(
                   <h3
                     class="font-extrabold text-sm text-slate-800 dark:text-slate-100 truncate"
                   >
-                    Câu {{ currentClipIdx + 1 }}/{{ clips.length }}
+                    Câu {{ currentClipIdx + 1 }}/{{
+                      totalSegments || clips.length
+                    }}
                   </h3>
                 </div>
+                <!-- Thời lượng đoạn: số thật từ phụ đề. Trước đây chỗ này là
+                     badge "A1 LEVEL" cứng vì clip không hề có trường `level`. -->
                 <span
-                  class="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 font-extrabold text-xs rounded-lg uppercase shrink-0"
+                  v-if="currentClip.duration"
+                  class="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/80 text-primary-500 font-extrabold text-xs rounded-lg shrink-0"
                 >
-                  {{ currentClip.level || 'A1' }} LEVEL
+                  {{ Math.round(currentClip.duration) }} giây
                 </span>
               </div>
 
@@ -1022,7 +1105,9 @@ const isLastClip = computed(
               :max-unlocked-idx="maxUnlockedIdx"
               :clip-states="clipStates"
               :total-segments="totalSegments"
+              :is-loading-more="isLoadingMore"
               @select="selectClip"
+              @load-more="loadMoreClips"
             />
           </div>
         </div>

@@ -4,10 +4,10 @@ import { assertRateLimit, clientIp } from '~/server/utils/rate-limit'
 import { requireUserId } from '~/server/utils/user'
 import {
   buildHint,
-  pickVocabularies,
   segmentCues,
   toRawCues,
 } from '~/server/utils/transcript-segment'
+import { extractYoutubeId } from '~/utils/youtube-url'
 
 const DEFAULT_LIMIT = 60
 const MAX_LIMIT = 200
@@ -18,17 +18,24 @@ export default defineEventHandler(async (event) => {
     assertRateLimit(`youtube:parse:${clientIp(event)}`, 30, 60 * 60 * 1000)
 
     const query = getQuery(event)
-    const rawUrl =
-      (query.url as string) ||
-      (query.youtubeId as string) ||
-      'https://www.youtube.com/watch?v=3iV2WK1-IV8'
+    const rawUrl = String(query.url || query.youtubeId || '').trim()
 
-    let youtubeId = '3iV2WK1-IV8'
-    const match = rawUrl.match(
-      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/,
-    )
-    if (match && match[1]) {
-      youtubeId = match[1]
+    if (!rawUrl) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Vui lòng cung cấp liên kết video YouTube!',
+      })
+    }
+
+    // Không có video mặc định: link sai phải báo lỗi, không được âm thầm
+    // chuyển người học sang một video khác.
+    const youtubeId = extractYoutubeId(rawUrl)
+    if (!youtubeId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage:
+          'Liên kết YouTube không hợp lệ! Hãy dán link dạng youtube.com/watch?v=... hoặc youtu.be/...',
+      })
     }
 
     const targetLang =
@@ -79,7 +86,16 @@ export default defineEventHandler(async (event) => {
       MAX_LIMIT,
     )
 
-    const clips = segments.slice(0, limit).map((s) => ({
+    // Cửa sổ trượt: video dài hơn `limit` câu phải tải tiếp được, nếu không
+    // người học kẹt ở câu 60 của 194 mà không có đường đi tiếp.
+    const offset = Math.min(
+      Math.max(Number(query.offset) || 0, 0),
+      Math.max(segments.length - 1, 0),
+    )
+
+    const clips = segments.slice(offset, offset + limit).map((s) => ({
+      // `id` là chỉ số segment toàn cục + 1, không phụ thuộc cửa sổ đang tải —
+      // nhờ vậy chỉ số mảng phía client luôn trùng khoá trong `clipStates`.
       id: s.index + 1,
       youtubeId,
       start: s.start,
@@ -90,8 +106,6 @@ export default defineEventHandler(async (event) => {
       germanText: s.text,
       wordCount: s.wordCount,
       hint: buildHint(s.text),
-      vocabularies: pickVocabularies(s.text),
-      englishTranslation: '',
     }))
 
     return {
@@ -99,6 +113,11 @@ export default defineEventHandler(async (event) => {
       youtubeId,
       // Ngôn ngữ phụ đề thực sự dùng được (có thể khác ngôn ngữ đang chọn).
       language: resolvedLang,
+      requestedLanguage: targetLang,
+      // Client cần biết để cảnh báo: không có video nào sai, nhưng phụ đề không
+      // đúng ngôn ngữ đang học thì người dùng phải được nói rõ.
+      languageFallback: resolvedLang !== targetLang,
+      offset,
       totalClips: clips.length,
       totalSegments: segments.length,
       clips,

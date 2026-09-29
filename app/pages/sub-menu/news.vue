@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useSrsStore } from '~/stores/useSrsStore'
+import { allSourcesLabel, feedsForLanguage } from '~/utils/news-sources'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: '📰 Tin tức & SRS Reader - Sprech Mit Uns' })
@@ -23,27 +24,37 @@ interface Article {
   lang?: 'de' | 'cs'
 }
 
-// Initial Daily News Articles Data for both languages
+// Bài mẫu để trang không trống khi chưa cào tin. Ngày tính tương đối lúc mount —
+// ngày cứng sẽ thành ngày tương lai và lẫn với tin thật.
+const daysAgo = (n: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+}
+
+const SAMPLE_SOURCE_DE = 'Bài mẫu · SprechMitUns'
+const SAMPLE_SOURCE_CS = 'Bài mẫu · SprechMitUns'
+
 const initialGermanArticles: Article[] = [
   {
     id: 'news-de-1',
     title: 'Guten Tag Berlin: Das Wetter im Frühling',
-    date: '08.09.2026',
+    date: daysAgo(1),
     level: 'A1',
     summary: 'Thời tiết mùa xuân tươi đẹp tại Berlin hôm nay.',
     content: 'Heute ist das Wetter in Berlin sehr schön. Die Sonne scheint und die Temperatur liegt bei zwanzig Grad.',
-    sourceName: 'SprechMitUns Daily',
+    sourceName: SAMPLE_SOURCE_DE,
     isSaved: true,
     lang: 'de',
   },
   {
     id: 'news-de-2',
     title: 'Neue Fahrradwege in München',
-    date: '07.09.2026',
+    date: daysAgo(2),
     level: 'A2',
     summary: 'Thành phố München mở rộng thêm nhiều làn đường dành cho xe đạp.',
     content: 'München baut neue Fahrradwege für mehr Sicherheit im Straßenverkehr. Viele Menschen fahren gern mit dem Fahrrad zur Arbeit.',
-    sourceName: 'SprechMitUns Daily',
+    sourceName: SAMPLE_SOURCE_DE,
     isSaved: false,
     lang: 'de',
   },
@@ -53,22 +64,22 @@ const initialCzechArticles: Article[] = [
   {
     id: 'news-cs-1',
     title: 'Krásné jarní počasí v Praze',
-    date: '08.09.2026',
+    date: daysAgo(1),
     level: 'A1',
     summary: 'Thời tiết mùa xuân tươi đẹp tại Praha hôm nay.',
     content: 'Dnes je v Praze velmi pěkné počasí. Slunce svítí a teplota dosahuje dvaceti stupňů.',
-    sourceName: 'SprechMitUns Czech Daily',
+    sourceName: SAMPLE_SOURCE_CS,
     isSaved: true,
     lang: 'cs',
   },
   {
     id: 'news-cs-2',
     title: 'Nové cyklostezky v Brně',
-    date: '07.09.2026',
+    date: daysAgo(2),
     level: 'A2',
     summary: 'Thành phố Brno mở rộng nhiều làn đường xe đạp mới cho người dân.',
     content: 'Brno staví nové cyklostezky pro větší bezpečnost v městském provozu. Mnoho lidí jezdí do práce na kole.',
-    sourceName: 'SprechMitUns Czech Daily',
+    sourceName: SAMPLE_SOURCE_CS,
     isSaved: false,
     lang: 'cs',
   },
@@ -122,21 +133,19 @@ const scrapeError = ref<string | null>(null)
 const scrapeSuccessMsg = ref<string | null>(null)
 const pageAlertError = ref<string | null>(null)
 
-// Available RSS sources dynamically based on active language
-const availableRssSources = computed(() => {
-  if (activeLang.value === 'cs') {
-    return [
-      { key: 'all', name: 'Tất cả nguồn tiếng Séc (iROZHLAS, ČT24, iDNES)' },
-      { key: 'irozhlas', name: 'iROZHLAS' },
-      { key: 'ct24', name: 'ČT24 (Česká televize)' },
-      { key: 'idnes', name: 'iDNES.cz' },
-    ]
+// Nguồn RSS lấy từ `~/utils/news-sources` — chung với handler cào, nên dropdown
+// không thể còn sót nguồn đã gỡ.
+const availableRssSources = computed(() => [
+  { key: 'all', name: allSourcesLabel(activeLang.value) },
+  ...feedsForLanguage(activeLang.value).map((f) => ({ key: f.key, name: f.name })),
+])
+
+// Nguồn của ngôn ngữ cũ không tồn tại ở ngôn ngữ mới — nếu giữ lại thì <select>
+// hiện rỗng vì value không khớp option nào.
+watch(availableRssSources, (sources) => {
+  if (!sources.some((s) => s.key === selectedSource.value)) {
+    selectedSource.value = 'all'
   }
-  return [
-    { key: 'all', name: 'Tất cả nguồn tiếng Đức (Tagesschau & DW)' },
-    { key: 'tagesschau', name: 'Tagesschau' },
-    { key: 'dw', name: 'Deutsche Welle' },
-  ]
 })
 
 onMounted(() => {
