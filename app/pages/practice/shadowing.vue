@@ -5,6 +5,13 @@ import { useDailyPath } from '~/composables/use-daily-path'
 import { useDailyQuests } from '~/composables/use-daily-quests'
 import { useGamification } from '~/composables/use-gamification'
 import { usePronunciationDrill } from '~/composables/use-pronunciation-drill'
+import {
+  SCORE_BAND_LABEL,
+  SCORE_EXCELLENT,
+  isPass,
+  scoreBand,
+} from '~/utils/shadowing-score'
+import type { ScoreBand } from '~/utils/shadowing-score'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: 'Shadowing Lab - Sprech Mit Uns' })
@@ -60,12 +67,18 @@ const activeFeedback = computed(() => {
   return feedback.value
 })
 
-const scoreTone = computed(() => {
-  const s = activeFeedback.value?.score ?? 0
-  if (s >= 85) return 'emerald'
-  if (s >= 60) return 'amber'
-  return 'rose'
-})
+// Màu và nhãn suy từ cùng một `scoreBand` nên không thể lệch nhau — trước đây
+// màu theo 85/60 còn nhãn theo 90/75/60, nên 87 điểm ra màu "xuất sắc" kèm chữ "Tốt".
+const TONE_BY_BAND: Record<ScoreBand, string> = {
+  excellent: 'emerald',
+  good: 'emerald',
+  fair: 'amber',
+  weak: 'rose',
+}
+
+const scoreTone = computed(
+  () => TONE_BY_BAND[scoreBand(activeFeedback.value?.score ?? 0)],
+)
 
 const applyScore = async () => {
   if (!current.value) return
@@ -79,10 +92,10 @@ const applyScore = async () => {
   if (!fb) return
   scoredLineId.value = lineId
 
-  if (fb.score >= 60) playSound('correct')
+  if (isPass(fb.score)) playSound('correct')
   else playSound('wrong')
 
-  if (fb.drillItems.length && fb.score < 90) {
+  if (fb.drillItems.length && fb.score < SCORE_EXCELLENT) {
     addFailures(fb.drillItems, currentLanguage.value)
     sessionWeakCount.value += fb.drillItems.length
     addedToDrill.value = true
@@ -199,12 +212,7 @@ const finishSession = () => {
   triggerConfetti()
 }
 
-const levelLabel = (score: number) => {
-  if (score >= 90) return 'Xuất sắc'
-  if (score >= 75) return 'Tốt'
-  if (score >= 60) return 'Khá — cần ôn vài từ'
-  return 'Cần luyện thêm'
-}
+const levelLabel = (score: number) => SCORE_BAND_LABEL[scoreBand(score)]
 </script>
 
 <template>

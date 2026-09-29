@@ -27,6 +27,41 @@ export interface ShadowingScoreReport {
   drillItems: { word: string; phrase: string; tip?: string }[]
 }
 
+/**
+ * Ngưỡng dùng chung cho mọi màn luyện nói/chép (thang 0–100 của `buildShadowingReport`).
+ *
+ * Trước đây mỗi trang tự đặt số: Dictation 80, Ôn phát âm 75, Shadowing 60 — cùng
+ * một điểm mà ba kết luận đạt/không khác nhau. Riêng Shadowing còn tô màu theo
+ * 85/60 nhưng gắn nhãn theo 90/75/60, nên 87 điểm ra màu "xuất sắc" kèm chữ "Tốt".
+ */
+export const SCORE_EXCELLENT = 90
+export const SCORE_GOOD = 75
+export const SCORE_FAIR = 60
+
+/** Mức đạt chung — cũng là mức gắn với hệ quả lâu dài (giãn lịch ôn phát âm). */
+export const SCORE_PASS = SCORE_GOOD
+
+export type ScoreBand = 'excellent' | 'good' | 'fair' | 'weak'
+
+/** Bậc điểm dùng cho CẢ màu lẫn nhãn, để hai thứ không thể lệch nhau. */
+export function scoreBand(score: number): ScoreBand {
+  if (score >= SCORE_EXCELLENT) return 'excellent'
+  if (score >= SCORE_GOOD) return 'good'
+  if (score >= SCORE_FAIR) return 'fair'
+  return 'weak'
+}
+
+export function isPass(score: number): boolean {
+  return score >= SCORE_PASS
+}
+
+export const SCORE_BAND_LABEL: Record<ScoreBand, string> = {
+  excellent: 'Xuất sắc',
+  good: 'Tốt',
+  fair: 'Khá — cần ôn vài từ',
+  weak: 'Cần luyện thêm',
+}
+
 function tokenize(s: string): string[] {
   return normalizeForCompare(s)
     .split(/\s+/)

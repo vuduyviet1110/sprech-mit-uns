@@ -3,6 +3,7 @@ import { usePronunciationDrill } from '~/composables/use-pronunciation-drill'
 import { useAudioPlayback } from '~/composables/vocab/use-audio-playback'
 import { useShadowing } from '~/composables/useShadowing'
 import { useGamification } from '~/composables/use-gamification'
+import { isPass } from '~/utils/shadowing-score'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: 'Ôn phát âm - Sprech Mit Uns' })
@@ -62,7 +63,7 @@ const finishCheck = () => {
   stopMic()
   // Score against the single weak word first; also allow phrase
   const fb = evaluateAgainst(current.value.word, current.value.language)
-  if (fb && fb.score >= 75) {
+  if (fb && isPass(fb.score)) {
     playSound('correct')
     markSuccess(current.value.id)
   } else {
@@ -219,12 +220,12 @@ const passWithoutMic = () => {
           <div v-if="feedback" class="text-center space-y-2">
             <p
               class="text-lg font-black tabular-nums"
-              :class="feedback.score >= 75 ? 'text-emerald-600' : 'text-amber-600'"
+              :class="isPass(feedback.score) ? 'text-emerald-600' : 'text-amber-600'"
             >
               {{ feedback.score }}/100
             </p>
             <p class="text-xs text-slate-500">
-              {{ feedback.score >= 75 ? 'Đạt — lịch ôn được kéo dài.' : 'Chưa đạt — vẫn đến hạn, thử lại sau khi nghe TTS.' }}
+              {{ isPass(feedback.score) ? 'Đạt — lịch ôn được kéo dài.' : 'Chưa đạt — vẫn đến hạn, thử lại sau khi nghe TTS.' }}
             </p>
           </div>
         </div>

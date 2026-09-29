@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useLanguage } from '~/composables/use-language'
-import { buildShadowingReport } from '~/utils/shadowing-score'
+import {
+  SCORE_EXCELLENT,
+  buildShadowingReport,
+  isPass,
+} from '~/utils/shadowing-score'
+import { usePronunciationDrill } from '~/composables/use-pronunciation-drill'
 import type { DiffKind, ShadowingScoreReport } from '~/utils/shadowing-score'
 import LessonDictationClipList from '~/components/lesson/DictationClipList.vue'
 import { extractYoutubeId } from '~/utils/youtube-url'
@@ -11,9 +16,8 @@ useHead({ title: 'YouTube Dictation Lab - Sprech Mit Uns' })
 
 const { playSound, triggerConfetti } = useGamification()
 const { currentLanguage } = useLanguage()
+const { addFailures } = usePronunciationDrill()
 
-/** Điểm tối thiểu để tính là chép đúng câu. */
-const PASS_SCORE = 80
 const PLAYER_ELEMENT_ID = 'youtube-dictation-player'
 
 // Starter sample lessons for German & Czech
@@ -457,13 +461,19 @@ const checkDictation = async () => {
     currentLanguage.value,
   )
   isChecked.value = true
-  isCorrect.value = report.value.score >= PASS_SCORE
+  isCorrect.value = isPass(report.value.score)
 
   if (isCorrect.value) {
     playSound('correct')
     triggerConfetti()
   } else {
     playSound('wrong')
+  }
+
+  // Từ chép sai đi vào hàng luyện phát âm, giống Shadowing Lab. Trước đây
+  // `report.drillItems` được tính ra rồi bỏ đi.
+  if (report.value.drillItems.length && report.value.score < SCORE_EXCELLENT) {
+    addFailures(report.value.drillItems, currentLanguage.value)
   }
 
   await persistClipAttempt(report.value.score, isCorrect.value)
