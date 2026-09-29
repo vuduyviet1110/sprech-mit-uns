@@ -11,4 +11,3 @@ dist
 README.md
 Dockerfile*
 docker-compose*
-prisma/migrations

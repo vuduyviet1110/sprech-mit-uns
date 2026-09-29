@@ -218,6 +218,14 @@ const fetchBookPage = async (reset = false) => {
   }
 }
 
+const setViewMode = (mode: DictViewMode) => {
+  if (mode === viewMode.value) return
+  // Set loading before the mode flip so the first paint is a skeleton, not empty white.
+  if (mode === 'book' && bookWords.value.length === 0) bookLoading.value = true
+  if (mode === 'grid' && topics.value.length === 0) loading.value = true
+  viewMode.value = mode
+}
+
 watch(viewMode, (mode) => {
   try {
     localStorage.setItem(VIEW_STORAGE_KEY, mode)
@@ -225,6 +233,17 @@ watch(viewMode, (mode) => {
   catch {}
   if (mode === 'book' && bookWords.value.length === 0) fetchBookPage(true)
   if (mode === 'grid' && topics.value.length === 0) fetchTopicsPage(true)
+})
+
+const isContentLoading = computed(() =>
+  viewMode.value === 'book'
+    ? bookLoading.value && bookWords.value.length === 0
+    : loading.value && topics.value.length === 0,
+)
+
+const isContentEmpty = computed(() => {
+  if (isContentLoading.value) return false
+  return viewMode.value === 'book' ? bookWords.value.length === 0 : filteredTopics.value.length === 0
 })
 
 const fetchTopicsPage = async (reset: boolean) => {
@@ -461,7 +480,7 @@ const clearFilters = () => {
                     ? 'bg-white dark:bg-slate-900 text-primary-700 dark:text-primary-300 shadow-sm'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 "
-                @click="viewMode = opt.value"
+                @click="setViewMode(opt.value)"
               >
                 <Icon :name="opt.icon" class="w-4 h-4" />
                 {{ opt.label }}
@@ -470,14 +489,89 @@ const clearFilters = () => {
           </div>
         </div>
 
-        <!-- Loading State -->
-        <div v-if="(viewMode === 'book' ? bookLoading : loading) && (viewMode === 'book' ? bookWords.length === 0 : topics.length === 0)" class="text-center py-20">
-          <LayoutPageLoading />
+        <!-- Loading skeletons (in-flow — avoid full-screen overlay leaving a blank gap) -->
+        <div v-if="isContentLoading" class="space-y-4" aria-busy="true" aria-live="polite">
+          <p class="sr-only">Đang tải {{ viewMode === 'book' ? 'giá sách' : 'danh sách thẻ' }}…</p>
+
+          <!-- Book shelf skeleton -->
+          <div
+            v-if="viewMode === 'book'"
+            class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.7fr)] gap-5 xl:gap-6 items-stretch min-h-[min(70vh,42rem)]"
+          >
+            <div class="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 overflow-hidden flex flex-col min-h-[28rem] animate-pulse">
+              <div class="flex items-start justify-between gap-4 px-5 sm:px-8 pt-6 sm:pt-8">
+                <div class="space-y-2">
+                  <div class="h-8 w-40 rounded-lg bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-4 w-56 rounded-md bg-slate-200/80 dark:bg-slate-700/80" />
+                </div>
+                <div class="h-14 w-20 rounded-xl bg-slate-200 dark:bg-slate-700" />
+              </div>
+              <div class="flex-1 flex items-end justify-center gap-4 px-8 pb-4 pt-12">
+                <div class="h-[min(52vh,22rem)] w-11 rounded-l-sm bg-primary-500/25 dark:bg-primary-400/20" />
+                <div class="h-[min(52vh,22rem)] w-[min(42vw,15rem)] sm:w-[16rem] rounded-r-xl bg-primary-500/35 dark:bg-primary-400/25" />
+                <div class="h-[min(40vh,16rem)] w-16 sm:w-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600" />
+              </div>
+              <div class="h-[18px] bg-amber-800/40 dark:bg-amber-900/50" />
+            </div>
+            <aside class="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 flex flex-col gap-5 animate-pulse">
+              <div class="space-y-2">
+                <div class="h-6 w-48 rounded-lg bg-slate-200 dark:bg-slate-700" />
+                <div class="h-4 w-full rounded-md bg-slate-100 dark:bg-slate-800" />
+                <div class="h-4 w-[80%] rounded-md bg-slate-100 dark:bg-slate-800" />
+              </div>
+              <div v-for="n in 3" :key="n" class="flex gap-3">
+                <div class="w-9 h-9 rounded-xl bg-primary-500/15 shrink-0" />
+                <div class="flex-1 space-y-2 py-1">
+                  <div class="h-4 w-32 rounded-md bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-3 w-full rounded-md bg-slate-100 dark:bg-slate-800" />
+                </div>
+              </div>
+              <div class="mt-auto grid grid-cols-2 gap-2.5">
+                <div class="h-16 rounded-xl bg-slate-100 dark:bg-slate-800" />
+                <div class="h-16 rounded-xl bg-slate-100 dark:bg-slate-800" />
+              </div>
+              <div class="h-12 rounded-xl bg-primary-500/30" />
+            </aside>
+          </div>
+
+          <!-- Card / topic grid skeleton -->
+          <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div
+              v-for="n in 4"
+              :key="n"
+              class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden animate-pulse"
+            >
+              <div class="p-6 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-4 min-w-0">
+                  <div class="w-12 h-12 rounded-xl bg-primary-500/15 shrink-0" />
+                  <div class="space-y-2 min-w-0">
+                    <div class="h-6 w-40 max-w-full rounded-lg bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-4 w-28 rounded-md bg-slate-100 dark:bg-slate-800" />
+                  </div>
+                </div>
+                <div class="h-9 w-28 rounded-xl bg-slate-100 dark:bg-slate-800 shrink-0 hidden sm:block" />
+              </div>
+              <div class="p-6 pt-0 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/40">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                  <div
+                    v-for="m in 2"
+                    :key="m"
+                    class="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3"
+                  >
+                    <div class="h-6 w-28 rounded-lg bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-4 w-full rounded-md bg-slate-100 dark:bg-slate-800" />
+                    <div class="h-4 w-3/4 rounded-md bg-slate-100 dark:bg-slate-800" />
+                    <div class="h-12 w-full rounded-xl bg-slate-50 dark:bg-slate-950" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Empty State -->
         <div
-          v-else-if="viewMode === 'book' ? !bookWords.length : !filteredTopics.length"
+          v-else-if="isContentEmpty"
           class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-16 text-center text-slate-500 space-y-4"
         >
           <Icon name="lucide:search-x" class="w-16 h-16 mx-auto text-slate-400" />

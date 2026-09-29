@@ -70,6 +70,14 @@ describe('session-scoped learning APIs (policy)', () => {
       resolve(root, 'server/api/vocabulary/[id].ts'),
       'utf8',
     )
+    const dictationGet = readFileSync(
+      resolve(root, 'server/api/youtube/progress.get.ts'),
+      'utf8',
+    )
+    const dictationPost = readFileSync(
+      resolve(root, 'server/api/youtube/progress.post.ts'),
+      'utf8',
+    )
 
     expect(topicApi).toContain('requireUserId')
     expect(topicApi).not.toMatch(/getQuery\(event\).*userId|const \{ userId \} = getQuery/)
@@ -81,5 +89,11 @@ describe('session-scoped learning APIs (policy)', () => {
     expect(dictPost).toContain('requireCatalogWriter')
     expect(vocabById).toContain('requireUserId')
     expect(vocabById).not.toContain('resolveUserId')
+    expect(dictationGet).toContain('requireUserId')
+    expect(dictationGet).toMatch(/where:\s*\{[^}]*userId/)
+    expect(dictationPost).toContain('requireUserId')
+    expect(dictationPost).toMatch(/where:\s*\{[^}]*userId/)
+    // Tiến độ/mở khoá phải do server suy ra, không nhận trực tiếp từ body client
+    expect(dictationPost).not.toMatch(/clipsDone\s*[:=]\s*(body|Number\(body)/)
   })
 })
