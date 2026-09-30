@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useDebounceFn, useIntersectionObserver } from '@vueuse/core'
 import { useAudioPlayback } from '~/composables/vocab/use-audio-playback'
 import { useLanguage, type LearningLanguage } from '~/composables/use-language'
@@ -12,7 +12,21 @@ useHead({ title: 'Tra Cứu Từ Điển Song Ngữ - Sprech Mit Uns' })
 
 const srsStore = useSrsStore()
 const { currentLanguage, setLanguage } = useLanguage()
-const { userId } = useSession()
+const { userId, isAdmin } = useSession()
+
+const showCreate = ref(false)
+const createBusy = ref(false)
+const createErrorText = ref('')
+const topicOptions = ref<{ id: string, name: string, level?: string | null }[]>([])
+const createForm = ref({
+  word: '',
+  meaning: '',
+  english: '',
+  example: '',
+  level: 'A1',
+  type: 'Noun',
+  topicId: '',
+})
 
 const savedWordMap = ref<Record<string, boolean>>({})
 const notebookWordMap = ref<Record<string, boolean>>({})
@@ -125,6 +139,7 @@ type DictTopic = {
   level?: string | null
   language?: string
   description?: string | null
+  wordTotal?: number
   words: VocabularyWord[]
 }
 
@@ -173,28 +188,65 @@ const bookHasMore = ref(true)
 const bookLoading = ref(false)
 const bookLoadingMore = ref(false)
 const bookTotal = ref(0)
+/** '' is the all-words volume; A1–C2 force that level inside the book. */
+const bookVolume = ref('')
+const volumeLoading = ref(false)
+const catalogTotal = ref(0)
+const levelCounts = ref<Record<string, number>>({})
+let bookFetchGen = 0
+
+const shelfVolumes = computed(() => [
+  { id: 'main', name: 'Tất cả', count: catalogTotal.value },
+  ...levels.map(level => ({
+    id: level,
+    name: level,
+    count: levelCounts.value[level] || 0,
+  })),
+])
+
+const loadShelfCounts = async () => {
+  try {
+    const res = await $fetch<{ total: number, levels: Record<string, number> }>('/api/dictionary/level', {
+      query: { language: selectedLang.value },
+    })
+    catalogTotal.value = res.total
+    levelCounts.value = res.levels || {}
+  }
+  catch (e) {
+    console.error(e)
+  }
+}
+
+const onOpenVolume = (id: string) => {
+  const next = id === 'main' ? '' : id
+  if (next === bookVolume.value && !volumeLoading.value) return
+  bookVolume.value = next
+  fetchBookPage(true)
+}
 
 const fetchBookPage = async (reset = false) => {
+  const gen = reset ? ++bookFetchGen : bookFetchGen
   if (reset) {
     bookPage.value = 1
     bookHasMore.value = true
-    bookWords.value = []
-    bookLoading.value = true
+    if (bookWords.value.length === 0) bookLoading.value = true
+    else volumeLoading.value = true
   }
   else {
-    if (!bookHasMore.value || bookLoadingMore.value || bookLoading.value) return
+    if (!bookHasMore.value || bookLoadingMore.value || bookLoading.value || volumeLoading.value) return
     bookLoadingMore.value = true
     bookPage.value += 1
   }
 
   try {
+    const level = bookVolume.value || selectedLevel.value
     const res = await $fetch<WordListResponse>('/api/dictionary', {
       query: {
         language: selectedLang.value,
         page: bookPage.value,
         limit: BOOK_PAGE_SIZE,
         ...(search.value.trim() ? { search: search.value.trim() } : {}),
-        ...(selectedLevel.value ? { level: selectedLevel.value } : {}),
+        ...(level ? { level } : {}),
         ...(selectedType.value ? { type: selectedType.value } : {}),
       },
     })
@@ -203,18 +255,24 @@ const fetchBookPage = async (reset = false) => {
       topicName: word.topics?.[0]?.topic?.name || null,
       transcription: word.transcription || word.pronunciation,
     }))
+    if (gen !== bookFetchGen) return
     bookWords.value = reset ? mapped : [...bookWords.value, ...mapped]
     bookHasMore.value = res.meta.hasMore
     bookTotal.value = res.meta.totalCount
   }
   catch (e) {
     console.error(e)
-    if (reset) bookWords.value = []
+    if (gen !== bookFetchGen) return
+    if (reset && bookWords.value.length === 0) bookWords.value = []
     if (!reset) bookPage.value = Math.max(1, bookPage.value - 1)
+    if (reset) bookVolume.value = ''
   }
   finally {
-    bookLoading.value = false
-    bookLoadingMore.value = false
+    if (gen === bookFetchGen) {
+      bookLoading.value = false
+      bookLoadingMore.value = false
+      volumeLoading.value = false
+    }
   }
 }
 
@@ -242,8 +300,9 @@ const isContentLoading = computed(() =>
 )
 
 const isContentEmpty = computed(() => {
-  if (isContentLoading.value) return false
-  return viewMode.value === 'book' ? bookWords.value.length === 0 : filteredTopics.value.length === 0
+  if (isContentLoading.value || volumeLoading.value) return false
+  if (viewMode.value === 'book') return bookWords.value.length === 0 && !bookVolume.value
+  return filteredTopics.value.length === 0
 })
 
 const fetchTopicsPage = async (reset: boolean) => {
@@ -290,8 +349,16 @@ const reloadFromFilters = useDebounceFn(() => {
 
 watch(
   [selectedLang, selectedLevel, selectedType, search],
-  () => reloadFromFilters(),
+  () => {
+    if (showCreate.value) loadTopicOptions()
+    reloadFromFilters()
+  },
 )
+
+watch(selectedLang, () => {
+  bookVolume.value = ''
+  loadShelfCounts()
+})
 
 useIntersectionObserver(loadMoreSentinel, (entries) => {
   if (entries[0]?.isIntersecting) fetchTopicsPage(false)
@@ -303,6 +370,7 @@ onMounted(() => {
   }
   catch {}
   loadNotebookIds()
+  loadShelfCounts()
   if (viewMode.value === 'book') fetchBookPage(true)
   else fetchTopicsPage(true)
 })
@@ -348,6 +416,84 @@ const clearFilters = () => {
   selectedLevel.value = ''
   selectedType.value = ''
 }
+
+const catalogTypes = wordTypes.filter(t => t.value)
+
+const loadTopicOptions = async () => {
+  try {
+    const res = await $fetch<TopicListResponse>('/api/dictionary/topic', {
+      query: { lang: selectedLang.value, summary: '1' },
+    })
+    topicOptions.value = (res.topics || []).map(t => ({
+      id: t.id,
+      name: t.name,
+      level: t.level,
+    }))
+    const stillThere = topicOptions.value.some(t => t.id === createForm.value.topicId)
+    if (!stillThere) createForm.value.topicId = topicOptions.value[0]?.id || ''
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const closeCreate = () => {
+  if (createBusy.value) return
+  showCreate.value = false
+}
+
+const onCreateKey = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') closeCreate()
+}
+
+watch(showCreate, (open) => {
+  if (open) {
+    loadTopicOptions()
+    window.addEventListener('keydown', onCreateKey)
+  } else {
+    window.removeEventListener('keydown', onCreateKey)
+  }
+})
+
+onUnmounted(() => window.removeEventListener('keydown', onCreateKey))
+
+const submitCatalogWord = async () => {
+  createErrorText.value = ''
+  const headword = createForm.value.word.trim()
+  const vi = createForm.value.meaning.trim()
+  const en = createForm.value.english.trim()
+  if (!headword || !vi) {
+    createErrorText.value = 'Nhập từ và nghĩa tiếng Việt'
+    return
+  }
+  const gloss = en ? `${vi} • ${en}` : vi
+  createBusy.value = true
+  try {
+    await $fetch('/api/dictionary', {
+      method: 'POST',
+      body: {
+        word: headword,
+        meaning: gloss,
+        example: createForm.value.example.trim(),
+        level: createForm.value.level,
+        type: createForm.value.type,
+        language: selectedLang.value,
+        topicId: createForm.value.topicId || undefined,
+      },
+    })
+    showToast(`Đã thêm "${headword}" vào từ điển`, 'Từ nằm trong kho chung, không phải sổ cá nhân')
+    createForm.value.word = ''
+    createForm.value.meaning = ''
+    createForm.value.english = ''
+    createForm.value.example = ''
+    showCreate.value = false
+    if (viewMode.value === 'book') fetchBookPage(true)
+    else fetchTopicsPage(true)
+  } catch (e: any) {
+    createErrorText.value = e?.data?.message || e?.data?.statusMessage || 'Không thêm được từ'
+  } finally {
+    createBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -380,6 +526,17 @@ const clearFilters = () => {
             </p>
           </div>
 
+          <div class="flex flex-col items-stretch sm:items-end gap-3">
+            <button
+              v-if="isAdmin"
+              type="button"
+              class="smu-btn"
+              @click="showCreate = true"
+            >
+              <Icon name="lucide:plus" class="w-5 h-5" />
+              Thêm từ
+            </button>
+
           <!-- Language Switcher -->
           <div class="inline-flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
             <button
@@ -396,6 +553,7 @@ const clearFilters = () => {
             >
               <span>🇨🇿 Tiếng Séc</span>
             </button>
+          </div>
           </div>
         </div>
 
@@ -587,6 +745,10 @@ const clearFilters = () => {
           :loading="bookLoadingMore"
           :language="selectedLang"
           :total-count="bookTotal"
+          :stock-count="catalogTotal"
+          :volumes="shelfVolumes"
+          :active-volume="bookVolume || 'main'"
+          :volume-loading="volumeLoading"
           :notebook-ids="notebookWordMap"
           :srs-words="savedWordMap"
           @play="(w) => playAudioOrSpeak({ word: w.word, paragraph: w.word, audioUrl: w.audioUrl || w.vocabularyWord?.audioUrl, pronunciation: w.pronunciation || w.vocabularyWord?.pronunciation, lang: w.language || selectedLang })"
@@ -594,6 +756,7 @@ const clearFilters = () => {
           @add-srs="handleAddToSrs"
           @add-phrase="handleAddPhraseToSrs"
           @load-more="fetchBookPage(false)"
+          @open-volume="onOpenVolume"
         />
 
         <!-- Topic List Groups (2-column full-width grid layout) -->
@@ -620,7 +783,13 @@ const clearFilters = () => {
                     </span>
                   </div>
                   <p class="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">
-                    {{ topic.filteredWords?.length || 0 }} từ vựng {{ search || selectedLevel || selectedType ? 'khớp bộ lọc' : '' }}
+                    {{ topic.wordTotal ?? topic.filteredWords?.length ?? 0 }} từ vựng {{ search || selectedLevel || selectedType ? 'khớp bộ lọc' : '' }}
+                    <span
+                      v-if="(topic.wordTotal || 0) > (topic.filteredWords?.length || 0)"
+                      class="block mt-1 font-bold text-slate-600 dark:text-slate-300"
+                    >
+                      Đang hiện {{ topic.filteredWords?.length }} từ đầu. Mở kiểu Sách, hoặc lọc cấp {{ topic.level }}, để tra hết.
+                    </span>
                   </p>
                 </div>
               </div>
@@ -741,10 +910,125 @@ const clearFilters = () => {
       </div>
     </LayoutPageSection>
 
+    <Teleport to="body">
+      <div
+        v-if="isAdmin && showCreate"
+        class="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4"
+      >
+        <button
+          type="button"
+          class="absolute inset-0 bg-slate-900/60 cursor-pointer"
+          aria-label="Đóng hộp thoại"
+          @click="closeCreate"
+        />
+        <form
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dict-create-title"
+          class="relative w-full max-w-2xl max-h-[min(92vh,46rem)] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 space-y-5 shadow-xl"
+          @submit.prevent="submitCatalogWord"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div class="space-y-1">
+              <h2 id="dict-create-title" class="text-xl font-extrabold text-slate-900 dark:text-white">Thêm từ vào kho chung</h2>
+              <p class="text-base text-slate-600 dark:text-slate-400">
+                Ngôn ngữ đang chọn: {{ selectedLang === 'cs' ? 'tiếng Séc' : 'tiếng Đức' }}.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="w-10 h-10 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer active:scale-95 transition-all duration-200"
+              aria-label="Đóng"
+              @click="closeCreate"
+            >
+              <Icon name="lucide:x" class="w-5 h-5" />
+            </button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="space-y-2 sm:col-span-2">
+              <span class="smu-label">Từ</span>
+              <input
+                v-model="createForm.word"
+                required
+                type="text"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-base font-bold text-slate-900 dark:text-white focus:outline-none focus:border-primary-500"
+                :placeholder="selectedLang === 'cs' ? 'ví dụ: pes' : 'ví dụ: der Hund'"
+              />
+            </label>
+            <label class="space-y-2">
+              <span class="smu-label">Nghĩa tiếng Việt</span>
+              <input
+                v-model="createForm.meaning"
+                required
+                type="text"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-base font-bold text-slate-900 dark:text-white focus:outline-none focus:border-primary-500"
+                placeholder="con chó"
+              />
+            </label>
+            <label class="space-y-2">
+              <span class="smu-label">Nghĩa tiếng Anh</span>
+              <input
+                v-model="createForm.english"
+                type="text"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-base font-bold text-slate-900 dark:text-white focus:outline-none focus:border-primary-500"
+                placeholder="dog"
+              />
+            </label>
+            <label class="space-y-2 sm:col-span-2">
+              <span class="smu-label">Câu ví dụ</span>
+              <input
+                v-model="createForm.example"
+                type="text"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-base text-slate-900 dark:text-white focus:outline-none focus:border-primary-500"
+                :placeholder="selectedLang === 'cs' ? 'Pes čeká u dveří.' : 'Der Hund wartet vor der Tür.'"
+              />
+            </label>
+            <label class="space-y-2">
+              <span class="smu-label">Cấp độ</span>
+              <select
+                v-model="createForm.level"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-950 text-base font-bold cursor-pointer focus:outline-none focus:border-primary-500"
+              >
+                <option v-for="lvl in levels" :key="lvl" :value="lvl">{{ lvl }}</option>
+              </select>
+            </label>
+            <label class="space-y-2">
+              <span class="smu-label">Từ loại</span>
+              <select
+                v-model="createForm.type"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-950 text-base font-bold cursor-pointer focus:outline-none focus:border-primary-500"
+              >
+                <option v-for="t in catalogTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+              </select>
+            </label>
+            <label class="space-y-2 sm:col-span-2">
+              <span class="smu-label">Chủ đề</span>
+              <select
+                v-model="createForm.topicId"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-950 text-base font-bold cursor-pointer focus:outline-none focus:border-primary-500"
+              >
+                <option v-for="topic in topicOptions" :key="topic.id" :value="topic.id">
+                  {{ topic.name }}{{ topic.level ? ` · ${topic.level}` : '' }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <p v-if="createErrorText" class="text-base font-bold text-red-500">{{ createErrorText }}</p>
+          <div class="flex items-center justify-end gap-3">
+            <button type="button" class="smu-btn-ghost" @click="closeCreate">Hủy</button>
+            <button type="submit" class="smu-btn" :disabled="createBusy">
+              <Icon :name="createBusy ? 'lucide:loader-2' : 'lucide:plus'" class="w-5 h-5" :class="createBusy ? 'animate-spin' : ''" />
+              Lưu vào từ điển
+            </button>
+          </div>
+        </form>
+      </div>
+    </Teleport>
+
     <!-- Inline Guaranteed Toast Notification -->
     <div
       v-if="activeToastText"
-      class="fixed bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
+      class="fixed bottom-32 sm:bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
       style="box-shadow: 0 15px 35px -5px rgba(16, 185, 129, 0.4);"
     >
       <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md">
