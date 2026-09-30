@@ -7,7 +7,7 @@ const srsStore = useSrsStore()
 <template>
   <div
     v-if="srsStore.toastMessage"
-    class="fixed bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
+    class="fixed bottom-32 sm:bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
     style="box-shadow: 0 15px 35px -5px rgba(16, 185, 129, 0.4);"
   >
     <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md">

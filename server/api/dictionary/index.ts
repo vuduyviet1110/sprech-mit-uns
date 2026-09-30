@@ -1,6 +1,6 @@
 import { prisma } from '~/server/ultis/prisma'
 import { defineEventHandler, getQuery, readBody, createError } from 'h3'
-import { requireCatalogWriter } from '~/server/utils/catalog-write'
+import { requireAdmin } from '~/server/utils/admin'
 
 export default defineEventHandler((event) => {
   const method = event.node.req.method
@@ -151,7 +151,7 @@ async function handleGet(event: any) {
 }
 
 async function handlePost(event: any) {
-  await requireCatalogWriter(event)
+  await requireAdmin(event)
   const body = await readBody(event)
   const {
     word,
@@ -166,28 +166,63 @@ async function handlePost(event: any) {
     imageUrl,
     antonyms,
     level,
+    language,
+    topicId,
     topicIds = [],
   } = body
   const type = bodyType || wordType
+  const headword = String(word || '').trim()
+  const gloss = String(meaning || '').trim()
+  const lang = language === 'cs' ? 'cs' : 'de'
+
+  if (!headword || !gloss) {
+    throw createError({
+      statusCode: 400,
+      message: 'Cần có từ và nghĩa',
+    })
+  }
+
+  const ids = [
+    ...(Array.isArray(topicIds) ? topicIds : []),
+    ...(topicId ? [topicId] : []),
+  ].filter((id: unknown) => typeof id === 'string' && id)
+
+  const duplicate = await prisma.vocabularyWord.findFirst({
+    where: {
+      word: { equals: headword, mode: 'insensitive' },
+      language: lang,
+      ...(level ? { level: String(level) } : {}),
+    },
+    select: { id: true },
+  })
+  if (duplicate) {
+    throw createError({
+      statusCode: 409,
+      message: 'Từ này đã có trong từ điển ở cấp độ đó',
+    })
+  }
 
   return prisma.vocabularyWord.create({
     data: {
-      word,
-      meaning,
+      word: headword,
+      meaning: gloss,
       pronunciation,
       type,
-      example,
+      example: example ? String(example) : null,
       audioUrl,
       synonyms,
       transcription,
       imageUrl,
       antonyms,
-      level,
-      topics: {
-        create: topicIds.map((id: string) => ({
-          topic: { connect: { id } },
-        })),
-      },
+      level: level ? String(level) : null,
+      language: lang,
+      topics: ids.length
+        ? {
+            create: ids.map((id: string) => ({
+              topic: { connect: { id } },
+            })),
+          }
+        : undefined,
     },
     include: {
       topics: {

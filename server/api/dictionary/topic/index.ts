@@ -77,6 +77,30 @@ export default defineEventHandler(async (event) => {
       const langWhere =
         lang === 'cs' || lang === 'de' ? { language: lang } : undefined
 
+      if (query.summary === '1') {
+        const topics = await prisma.topic.findMany({
+          where: langWhere,
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            level: true,
+            language: true,
+          },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        })
+        return {
+          topics: topics.map((t) => ({ ...t, words: [] })),
+          meta: {
+            page: 1,
+            limit: topics.length,
+            hasMore: false,
+            totalTopics: topics.length,
+            totalWords: 0,
+          },
+        }
+      }
+
       const topicWhere: Record<string, unknown> = {
         ...(langWhere || {}),
       }
@@ -105,12 +129,6 @@ export default defineEventHandler(async (event) => {
             level: true,
             language: true,
             description: true,
-            words: {
-              where: wordFilter ? { word: wordFilter } : undefined,
-              select: {
-                word: { select: wordSelect },
-              },
-            },
           },
           orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
           skip,
@@ -118,10 +136,31 @@ export default defineEventHandler(async (event) => {
         }),
       ])
 
-      const mapped = topics.map((t) => ({
-        ...t,
-        words: t.words.map((w) => w.word).filter(Boolean),
-      }))
+      const FREQ_PREVIEW = 40
+      const mapped = await Promise.all(
+        topics.map(async (t) => {
+          const preview =
+            !wordFilter && String(t.slug || '').startsWith('cs-freq-')
+          const linkWhere = {
+            topicId: t.id,
+            ...(wordFilter ? { word: wordFilter } : {}),
+          }
+          const [links, wordTotal] = await Promise.all([
+            prisma.wordTopic.findMany({
+              where: linkWhere as any,
+              ...(preview ? { take: FREQ_PREVIEW } : {}),
+              orderBy: preview ? { word: { word: 'asc' } } : undefined,
+              select: { word: { select: wordSelect } },
+            }),
+            prisma.wordTopic.count({ where: linkWhere as any }),
+          ])
+          return {
+            ...t,
+            wordTotal,
+            words: links.map((w) => w.word).filter(Boolean),
+          }
+        }),
+      )
 
       return {
         topics: mapped,

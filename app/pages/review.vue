@@ -549,7 +549,7 @@ onUnmounted(() => {
     <!-- Feedback toast -->
     <div
       v-if="feedbackToast"
-      class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 max-w-md px-5 py-3 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-lg border border-primary-500/40"
+      class="fixed bottom-32 sm:bottom-8 right-8 z-50 max-w-[min(24rem,calc(100vw-4rem))] px-5 py-3 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-lg border border-primary-500/40"
     >
       {{ feedbackToast }}
     </div>

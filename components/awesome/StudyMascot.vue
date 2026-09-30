@@ -5,7 +5,7 @@
  * (MIT © Kamran Ahmed, https://github.com/nilbuild/page-mascot).
  * Study tips / greetings / streak cues are app-specific extensions.
  */
-import { MASCOT_REACTIONS } from '~/composables/use-study-mascot'
+import { MASCOT_REACTIONS } from '~/utils/mascot-tips'
 
 const DIRECTIONS = [
   'up-left',
@@ -51,12 +51,36 @@ const {
   reaction,
   line,
   collapsed,
+  enabled,
+  action,
   boop,
   askTip,
+  runAction,
   setCollapsed,
   hydrateCollapsed,
   touch,
 } = useStudyMascot()
+
+/**
+ * Sprite cảm xúc (~190KB) chỉ tải khi sắp cần: lần đầu cáo có phản ứng, hoặc
+ * khi chuột vừa rê tới. Phần lớn phiên chỉ đọc bài, không bao giờ chạm tới nó.
+ */
+const reactionsReady = ref(false)
+let reactionsRequested = false
+
+function preloadReactions() {
+  if (reactionsRequested || !import.meta.client) return
+  reactionsRequested = true
+  const img = new Image()
+  img.onload = () => {
+    reactionsReady.value = true
+  }
+  img.src = REACTIONS_URL
+}
+
+watch(reaction, (value) => {
+  if (value) preloadReactions()
+})
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const squashRef = ref<HTMLElement | null>(null)
@@ -64,6 +88,8 @@ const direction = ref<Direction>('center')
 
 const directionCell = computed(() => cellStyle(DIRECTIONS.indexOf(direction.value)))
 const reactionCell = computed(() => cellStyle(MASCOT_REACTIONS.indexOf(reaction.value ?? 'blink')))
+/** Chỉ đổi sang mặt cảm xúc khi ảnh đã sẵn sàng, tránh nháy ô trống. */
+const showReaction = computed(() => !!reaction.value && reactionsReady.value)
 
 function cellStyle(index: number) {
   return {
@@ -122,6 +148,7 @@ onMounted(() => {
   hydrateCollapsed()
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
   tracking = true
+  buttonRef.value?.addEventListener('pointerenter', preloadReactions, { once: true })
   window.addEventListener('pointermove', onPointerMove, { passive: true })
   window.addEventListener('scroll', aim, { passive: true })
 })
@@ -136,6 +163,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div
+      v-if="enabled"
       class="pointer-events-none fixed bottom-4 left-4 z-30 flex items-end gap-2"
       style="bottom: max(1rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left))"
       data-testid="study-mascot"
@@ -155,13 +183,28 @@ onUnmounted(() => {
       />
 
       <div v-else class="pointer-events-auto relative flex flex-col items-start gap-2">
-        <p
+        <div
           v-if="line"
-          class="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[15rem] rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-sm font-bold leading-snug text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-          role="status"
+          class="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[15rem] rounded-2xl border border-slate-200/80 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900"
         >
-          {{ line }}
-        </p>
+          <p
+            class="text-sm font-bold leading-snug text-slate-800 dark:text-slate-100"
+            data-testid="mascot-line"
+            role="status"
+          >
+            {{ line }}
+          </p>
+          <button
+            v-if="action"
+            type="button"
+            class="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-3 py-1.5 text-xs font-extrabold text-white transition-all duration-200 active:scale-95 hover:bg-primary-600"
+            data-testid="mascot-action"
+            @click="runAction"
+          >
+            {{ action.label }}
+            <Icon name="lucide:arrow-right" class="h-3.5 w-3.5" />
+          </button>
+        </div>
 
         <div class="flex items-end gap-2">
           <button
@@ -182,16 +225,16 @@ onUnmounted(() => {
                   backgroundImage: `url(${DIRECTIONS_URL})`,
                   backgroundSize: '300% 300%',
                   ...directionCell,
-                  opacity: reaction ? 0 : 1,
+                  opacity: showReaction ? 0 : 1,
                 }"
               />
               <span
                 class="absolute inset-0 bg-no-repeat"
                 :style="{
-                  backgroundImage: `url(${REACTIONS_URL})`,
+                  backgroundImage: reactionsReady ? `url(${REACTIONS_URL})` : 'none',
                   backgroundSize: '300% 300%',
                   ...reactionCell,
-                  opacity: reaction ? 1 : 0,
+                  opacity: showReaction ? 1 : 0,
                 }"
                 aria-hidden="true"
               />
@@ -203,6 +246,7 @@ onUnmounted(() => {
               type="button"
               class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-primary-200/80 bg-primary-50 px-2.5 py-1.5 text-sm font-extrabold text-primary-700 shadow-sm transition-all duration-200 active:scale-95 dark:border-primary-800 dark:bg-primary-950/50 dark:text-primary-300"
               aria-label="Xin mẹo học từ cáo"
+              data-testid="mascot-tip"
               @click="onAskTip"
             >
               <Icon name="lucide:lightbulb" class="h-4 w-4" />
@@ -212,6 +256,7 @@ onUnmounted(() => {
               type="button"
               class="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 shadow-sm transition-all duration-200 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
               aria-label="Thu nhỏ cáo"
+              data-testid="mascot-collapse"
               @click="setCollapsed(true)"
             >
               <Icon name="lucide:minus" class="h-5 w-5" />

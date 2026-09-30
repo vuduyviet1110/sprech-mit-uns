@@ -251,8 +251,15 @@ const removeWord = (index: number) => {
   selectedOptions.value = selectedOptions.value.filter((w) => w !== word)
 }
 
+/** Mốc bắt đầu câu hiện tại, để biết người học trả lời nhanh hay còn nghĩ lâu. */
+let questionStartedAt = 0
+/** Đã sai ở chính câu này chưa — đúng sau khi sai là chuyện đáng ghi nhận riêng. */
+let missedCurrent = false
+
 // Synchronize state when moving between questions
 watch(currentQuestion, (q) => {
+  questionStartedAt = Date.now()
+  missedCurrent = false
   selectedChoiceIdx.value = null
   isSubmitted.value = false
   inputSentence.value = ''
@@ -308,9 +315,13 @@ const checkAnswer = () => {
   isSubmitted.value = true
 
   if (isCorrect) {
-    playSound('correct')
+    playSound('correct', {
+      ms: questionStartedAt ? Date.now() - questionStartedAt : null,
+      afterMistake: missedCurrent,
+    })
     triggerConfetti()
   } else {
+    missedCurrent = true
     playSound('wrong')
   }
 }

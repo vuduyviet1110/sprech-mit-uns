@@ -3,10 +3,73 @@ import { ref, computed } from 'vue'
 import { demoFlashcards, features, levels, topicsData } from '~/mock-data'
 
 const selectedLevel = ref('A1') // Default select A1 for immediate interactivity
+const featureGridRef = ref(null)
+const featureArmed = ref(false)
+const featureDealt = ref(false)
+
+function layoutDeal() {
+  const grid = featureGridRef.value
+  if (!grid) return
+  const cards = [...grid.querySelectorAll('.deal-card')]
+  if (!cards.length) return
+  const deckX = grid.clientWidth / 2
+  const deckY = 12
+  cards.forEach((card, i) => {
+    const fan = (i - (cards.length - 1) / 2) * 5.5
+    card.style.setProperty('--deal-x', `${deckX - (card.offsetLeft + card.offsetWidth / 2)}px`)
+    card.style.setProperty('--deal-y', `${deckY - (card.offsetTop + card.offsetHeight / 2)}px`)
+    card.style.setProperty('--deal-rot', `${fan}deg`)
+    card.style.setProperty('--deal-delay', `${i * 55}ms`)
+  })
+}
 
 function selectLevel(code) {
   selectedLevel.value = selectedLevel.value === code ? null : code
 }
+
+onMounted(() => {
+  const grid = featureGridRef.value
+  if (!grid) return
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    featureDealt.value = true
+    return
+  }
+
+  let ready = false
+  let queued = false
+  const arm = () => {
+    layoutDeal()
+    featureArmed.value = true
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ready = true
+        if (queued) featureDealt.value = true
+      })
+    })
+  }
+  arm()
+
+  const io = new IntersectionObserver(
+    ([entry]) => {
+      if (!entry?.isIntersecting) return
+      if (ready) featureDealt.value = true
+      else queued = true
+      io.disconnect()
+    },
+    { threshold: 0.18, rootMargin: '0px 0px -8% 0px' },
+  )
+  io.observe(grid)
+
+  const onResize = () => {
+    if (!featureDealt.value) layoutDeal()
+  }
+  window.addEventListener('resize', onResize)
+
+  onUnmounted(() => {
+    io.disconnect()
+    window.removeEventListener('resize', onResize)
+  })
+})
 
 const levelTopics = computed(() => {
   if (!selectedLevel.value) return []
@@ -196,7 +259,7 @@ const levelTone = {
       <div class="max-w-8xl mx-auto">
         <AwesomeLandingReveal class="text-center mb-10 sm:mb-14">
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-700 dark:text-primary-300 text-xs font-bold uppercase tracking-wider mb-3">
-            <Icon name="lucide:layers" class="w-4 h-4 text-primary-500 animate-bounce" />
+            <Icon name="lucide:layers" class="w-4 h-4 text-primary-500" />
             Bộ Công Cụ Toàn Diện
           </div>
           <h3 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white mb-3">
@@ -208,12 +271,12 @@ const levelTone = {
         </AwesomeLandingReveal>
 
         <!-- Card deck dealing — animate when scrolled into view -->
-        <div class="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AwesomeLandingReveal
+        <div ref="featureGridRef" class="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
             v-for="(feature, i) in features"
             :key="feature.title"
-            variant="deal"
-            :delay="i * 100"
+            class="deal-card h-full"
+            :class="{ 'is-armed': featureArmed, 'is-dealt': featureDealt }"
           >
             <div
               class="group relative h-full flex space-x-4 rounded-2xl p-6 bg-white/95 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1.5 hover:rotate-1 transition-all duration-300 cursor-pointer"
@@ -238,7 +301,7 @@ const levelTone = {
               </p>
             </div>
           </div>
-          </AwesomeLandingReveal>
+          </div>
         </div>
 
         <AwesomeLandingReveal variant="scale" :delay="120" class="mt-14">
@@ -293,5 +356,34 @@ const levelTone = {
 .drawer-slide-enter-active,
 .drawer-slide-leave-active {
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dealt from one deck at the top-center of the grid into each slot. */
+.deal-card {
+  opacity: 0;
+  pointer-events: none;
+}
+.deal-card.is-armed:not(.is-dealt) {
+  transform: translate3d(var(--deal-x, 0px), var(--deal-y, 28px), 0) scale(0.78) rotate(var(--deal-rot, -6deg));
+  transform-origin: 50% 30%;
+  will-change: transform, opacity;
+}
+.deal-card.is-dealt {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+  pointer-events: auto;
+  transition:
+    transform 0.58s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.4s ease;
+  transition-delay: var(--deal-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .deal-card,
+  .deal-card.is-dealt {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition: none;
+  }
 }
 </style>

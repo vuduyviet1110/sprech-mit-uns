@@ -33,6 +33,9 @@ onMounted(() => {
   }
 })
 
+const roomErrorMessage = (err: any, fallback: string) =>
+  err?.data?.message || err?.data?.statusMessage || err?.statusMessage || err?.message || fallback
+
 const copyInviteLink = () => {
   const pin = createdPin.value || joinedPin.value || pinInput.value
   if (!pin) return
@@ -64,7 +67,7 @@ const handleCreateRoom = async () => {
       errorMessage.value = 'Không thể tạo phòng lúc này'
     }
   } catch (err: any) {
-    errorMessage.value = err.message || 'Lỗi hệ thống'
+    errorMessage.value = roomErrorMessage(err, 'Lỗi hệ thống')
   } finally {
     isSubmitting.value = false
   }
@@ -419,12 +422,16 @@ onUnmounted(() => {
           </p>
         </div>
 
+        <p v-if="errorMessage" class="text-sm font-bold text-red-500">
+          {{ errorMessage }}
+        </p>
+
         <button
           @click="handleCreateRoom"
           :disabled="isSubmitting"
           class="w-full py-3 bg-primary-500 hover:bg-primary-600 active:scale-95 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-sm transition-all duration-200 cursor-pointer"
         >
-          Tạo Phòng Nhận PIN
+          {{ isSubmitting ? 'Đang tạo phòng...' : 'Tạo Phòng Nhận PIN' }}
         </button>
       </div>
 

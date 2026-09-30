@@ -19,7 +19,6 @@ const visible = ref(false)
 
 let io: IntersectionObserver | null = null
 let nearTimer: ReturnType<typeof setTimeout> | undefined
-let safetyTimer: ReturnType<typeof setTimeout> | undefined
 
 function markVisible() {
   if (visible.value) return
@@ -27,12 +26,17 @@ function markVisible() {
   io?.disconnect()
   io = null
   if (nearTimer) clearTimeout(nearTimer)
-  if (safetyTimer) clearTimeout(safetyTimer)
+  window.removeEventListener('scroll', onScroll, true)
 }
 
 function isNearViewport(el: HTMLElement) {
   const rect = el.getBoundingClientRect()
   return rect.top < window.innerHeight * 0.95 && rect.bottom > 0
+}
+
+function onScroll() {
+  const el = root.value
+  if (el && isNearViewport(el)) markVisible()
 }
 
 onMounted(() => {
@@ -56,7 +60,7 @@ onMounted(() => {
   )
   io.observe(el)
 
-  // Already on-screen after SPA remount / short pages
+  // Already on-screen after SPA remount / short pages — never reveal while still below the fold
   requestAnimationFrame(() => {
     if (isNearViewport(el)) markVisible()
   })
@@ -65,14 +69,13 @@ onMounted(() => {
     if (el && isNearViewport(el)) markVisible()
   }, 350)
 
-  // Absolute safety — only if still stuck (never leave blank forever)
-  safetyTimer = setTimeout(() => markVisible(), 6000)
+  window.addEventListener('scroll', onScroll, { passive: true, capture: true })
 })
 
 onUnmounted(() => {
   io?.disconnect()
   if (nearTimer) clearTimeout(nearTimer)
-  if (safetyTimer) clearTimeout(safetyTimer)
+  window.removeEventListener('scroll', onScroll, true)
 })
 </script>
 

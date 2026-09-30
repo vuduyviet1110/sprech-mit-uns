@@ -1,4 +1,5 @@
 import confetti from 'canvas-confetti'
+import type { AnswerSample } from '~/utils/mascot-quality'
 
 export function useGamification() {
   const { cue } = useStudyMascot()
@@ -35,8 +36,13 @@ export function useGamification() {
   /**
    * Phát âm thanh Ting! (đúng) hoặc Bzz! (sai) dùng Web Audio API thuần (không lo thiếu file mp3)
    */
-  const playSound = (type: 'correct' | 'wrong' | 'complete') => {
-    cue(type)
+  /**
+   * @param sample Thời gian trả lời và việc đã sai trước đó chưa — cáo dùng để
+   *   khen đúng thứ vừa xảy ra thay vì một câu chung. Bỏ trống vẫn chạy bình
+   *   thường, chỉ là lời khen không phân biệt được nhanh/chậm.
+   */
+  const playSound = (type: 'correct' | 'wrong' | 'complete', sample?: AnswerSample) => {
+    cue(type, undefined, sample)
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
       if (!AudioCtx) return

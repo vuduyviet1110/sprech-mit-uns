@@ -15,6 +15,7 @@ const primaryLang = ref('de')
 const speechRate = ref(0.85)
 const dailyReminder = ref(true)
 const autoPlayAudio = ref(true)
+const mascot = ref(true)
 const srsTargetPerDay = ref(20)
 const savedFlash = ref(false)
 const authMsg = ref('')
@@ -26,6 +27,7 @@ onMounted(async () => {
   speechRate.value = settings.value.speechRate
   dailyReminder.value = settings.value.dailyReminder
   autoPlayAudio.value = settings.value.autoPlayAudio
+  mascot.value = settings.value.mascot
   srsTargetPerDay.value = settings.value.dailyReviewTarget
   try {
     const me = await fetchMe()
@@ -41,6 +43,7 @@ const saveSettings = () => {
     speechRate: speechRate.value,
     dailyReminder: dailyReminder.value,
     autoPlayAudio: autoPlayAudio.value,
+    mascot: mascot.value,
     dailyReviewTarget: srsTargetPerDay.value,
   })
   syncSrsQuestTotal(srsTargetPerDay.value)
@@ -173,6 +176,11 @@ const logout = async () => {
               <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 cursor-pointer">
                 <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Bật nhắc nhở học tập hàng ngày</span>
                 <input v-model="dailyReminder" type="checkbox" class="w-4 h-4 accent-primary-500 cursor-pointer" />
+              </label>
+
+              <label class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 cursor-pointer">
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Hiện cáo đồng hành (mẹo học &amp; động viên)</span>
+                <input v-model="mascot" type="checkbox" class="w-4 h-4 accent-primary-500 cursor-pointer" />
               </label>
             </div>
           </div>

@@ -17,6 +17,7 @@ useHead({ title: 'YouTube Dictation Lab - Sprech Mit Uns' })
 const { playSound, triggerConfetti } = useGamification()
 const { currentLanguage } = useLanguage()
 const { addFailures } = usePronunciationDrill()
+const { cue } = useStudyMascot()
 
 const PLAYER_ELEMENT_ID = 'youtube-dictation-player'
 
@@ -328,6 +329,15 @@ const persistClipAttempt = async (score: number, done: boolean) => {
           pathCompleted: { shadowing: true },
         },
       }).catch(() => {})
+
+      // Mốc đáng ghi nhận trong Dictation: cứ 10 câu và khi xong cả video.
+      const done = p?.clipsDone ?? 0
+      const total = totalSegments.value || clips.value.length
+      if (total > 0 && done >= total) {
+        cue('streak', `Chép xong cả ${total} câu của video!`)
+      } else if (done > 0 && done % 10 === 0) {
+        cue('encourage', `${done} câu rồi — tai đang quen dần đấy.`)
+      }
     }
   } catch (err) {
     console.warn('Không lưu được tiến độ luyện nghe:', err)

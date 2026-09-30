@@ -29,7 +29,7 @@ npx prisma migrate resolve --applied 20260917000000_init
 npx prisma migrate deploy
 ```
 
-App chạy tại `http://localhost:5134`.
+App chạy tại `http://localhost:3000`.
 
 Đăng ký tài khoản mới, hoặc đăng nhập demo (chỉ khi không phải production / có `SMU_ALLOW_DEMO`). Các route học yêu cầu đăng nhập (session httpOnly).
 
@@ -63,6 +63,42 @@ node -p "require('./node_modules/@nuxt/vite-builder/package.json').version"  # p
 > `autoprefixer`, trong khi `nuxt.config.ts` và 35 file trong `server/` import chúng trực tiếp.
 > Gỡ cờ này là repo gãy.
 
+### Viết test e2e cần đăng nhập
+
+**Không dùng `page.request.*` cho API cần phiên — luôn trả 401.**
+
+Cookie phiên đặt `secure: true` khi `NODE_ENV=production` (`server/utils/session.ts`), mà
+Playwright chạy production trên `http://127.0.0.1`. Trình duyệt vẫn gửi cookie đó khi điều
+hướng vì localhost là secure context, nhưng `page.request` thì không.
+
+Gọi API bằng `fetch` từ trong trang (xem `tests/e2e/language-hydrate.spec.ts`):
+
+```ts
+await page.goto('/login', { waitUntil: 'domcontentloaded' })
+await page.evaluate(async () => {
+  await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'demo@sprech.local', password: 'demo123' }),
+  })
+})
+```
+
+### Kiểm migration trên DB sạch
+
+Migration ở repo này **viết tay** (không có `migrate dev`), nên lỗi chỉ lộ ra khi deploy từ
+đầu. Kiểm mà không đụng DB dev:
+
+```bash
+# tạo DB trống rồi chạy toàn bộ migration lên đó
+DATABASE_URL="…/smu_migrate_check?schema=public" \
+DIRECT_DATABASE_URL="…/smu_migrate_check?schema=public" \
+  pnpm exec prisma migrate deploy
+```
+
+`tests/unit/migration-sql.test.ts` chốt sẵn hai lỗi hay gặp: dòng mở đầu bằng `#` (Postgres
+dùng `--`), và model có trong `schema.prisma` nhưng quên `CREATE TABLE`.
+
 ## Tính năng chính
 
 - Lộ trình hôm nay (SRS → Shadowing → Active Recall) + bài tiếp theo theo curriculum
@@ -71,9 +107,36 @@ node -p "require('./node_modules/@nuxt/vite-builder/package.json').version"  # p
 - YouTube dictation, news scraper (DE/CS) — cần đăng nhập
 - Quiz solo; phòng nhóm là **demo** (tắt mặc định khi `NODE_ENV=production`)
 
-## TTS & Sentry
+## TTS, dịch & Sentry
 
 - TTS mặc định: proxy Google (cache + retry) → fallback Web Speech. CI/local ổn định: `SMU_TTS_PROVIDER=off` và `NUXT_PUBLIC_TTS_MODE=browser`.
+- Dịch từ vựng chạy **ba tầng dự phòng**, mặc định không cần key:
+
+  | Tầng | Nguồn | Điều kiện |
+  |---|---|---|
+  | 1 | Cloud Translation API | có `GOOGLE_TRANSLATE_API_KEY` (500.000 ký tự/tháng miễn phí ≈ 50.000 lượt tra) |
+  | 2 | `translate_a/single` của Google Dịch | luôn có, không key |
+  | 3 | MyMemory | khi tầng 2 bị chặn |
+
+  Ép chế độ bằng `SMU_TRANSLATE_PROVIDER=cloud|free|off`. Response có header
+  `X-Translate-Via: cloud|free|mymemory` cho biết đường nào đã trả kết quả.
+
+  > Tầng 2 không key và không SLA: `client=gtx` từng trả 429 hàng loạt. Đo thực
+  > tế cho thấy yếu tố quyết định là **User-Agent** — giả UA trình duyệt thì bị
+  > chặn, để UA mặc định thì qua, nên `translate-provider.ts` cố ý không đặt UA
+  > và thử lần lượt `gtx → dict-chrome-ex → at`. Tầng 3 tồn tại để lúc Google
+  > chặn thì app vẫn tra được nghĩa.
+  >
+  > MyMemory trả **HTTP 200 kèm thông báo lỗi nằm trong trường dịch**, nên
+  > `parseMyMemoryResponse` lọc theo `responseStatus` trong body chứ không theo
+  > mã HTTP.
+  >
+  > Đã cân nhắc và **loại LibreTranslate**: `cs→vi` dịch vòng qua tiếng Anh rồi
+  > kẹt lại ở đó (`láska` → "love" thay vì "tình yêu"), bản chính cần key trả
+  > phí, mirror công cộng giới hạn 3 request/phút.
+  >
+  > Khi cả ba tầng hỏng, API trả **503** chứ không trả lại nguyên văn từ gốc —
+  > trước đây nuốt lỗi khiến người dùng thấy "Haus" nghĩa là "Haus".
 - Sentry tùy chọn qua `NUXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` (scrub cookie & password).
 - Pháp lý: `/privacy`, `/terms` (link footer).
 

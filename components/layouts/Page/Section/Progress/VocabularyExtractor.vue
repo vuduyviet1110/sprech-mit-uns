@@ -60,13 +60,11 @@
                 </div>
               </div>
 
-              <!-- Example -->
-              <div class="bg-white/50 p-3 rounded border">
-                <div class="text-sm font-medium text-blue-800 mb-1">
+              <!-- Câu ví dụ. `exampleTranslation` từng render ở đây nhưng là
+                   trường của dữ liệu mẫu cũ, không có trong VocabularyWord. -->
+              <div v-if="word.example" class="bg-white/50 p-3 rounded border">
+                <div class="text-sm font-medium text-blue-800">
                   {{ word.example }}
-                </div>
-                <div class="text-sm text-gray-600">
-                  {{ word.exampleTranslation }}
                 </div>
               </div>
 
@@ -135,79 +133,47 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { getWordProgress, updateWordProgress } from '~/utils/progressUtils'
 import { useAudioPlayback } from '~/composables/vocab/use-audio-playback'
+import { useSession } from '~/composables/use-session'
+import type { VocabularyWord } from '~/utils/types'
 
-const props = defineProps<{ paragraph: string; topicId: string }>()
+const props = defineProps<{
+  paragraph: string
+  topicId: string
+  /** Từ vựng thật của bài học. Không truyền thì không hiện gì. */
+  flashcards?: VocabularyWord[]
+}>()
 
-const vocabularyData = [
-  {
-    id: 'fahre',
-    word: 'fahre',
-    meaning: 'drive/travel',
-    type: 'verb',
-    pronunciation: '/ˈfaːrə/',
-    difficulty: 'easy',
-    example: 'Ich fahre mit dem Zug.',
-    exampleTranslation: 'I travel by train.',
-  },
-  {
-    id: 'haus',
-    word: 'Haus',
-    meaning: 'house',
-    type: 'noun',
-    pronunciation: '/haʊs/',
-    difficulty: 'medium',
-    example: 'Das Haus ist groß.',
-    exampleTranslation: 'The house is big.',
-  },
-  {
-    id: 'schnell',
-    word: 'schnell',
-    meaning: 'fast',
-    type: 'adjective',
-    pronunciation: '/ʃnɛl/',
-    difficulty: 'easy',
-    example: 'Der Zug ist schnell.',
-    exampleTranslation: 'The train is fast.',
-  },
-  {
-    id: 'lernen',
-    word: 'lernen',
-    meaning: 'to learn',
-    type: 'verb',
-    pronunciation: '/ˈlɛrnən/',
-    difficulty: 'medium',
-    example: 'Ich lerne Deutsch.',
-    exampleTranslation: 'I am learning word.',
-  },
-  {
-    id: 'gehen',
-    word: 'gehen',
-    meaning: 'to go',
-    type: 'verb',
-    pronunciation: '/ˈɡeːən/',
-    difficulty: 'hard',
-    example: 'Wir gehen nach Hause.',
-    exampleTranslation: 'We are going home.',
-  },
-]
+const { userId } = useSession()
+/** Id để gắn tiến độ. Chưa đăng nhập thì không ghi gì. */
+const progressUserId = computed(() => userId.value || '')
+
+const vocabularyData = computed(() =>
+  (props.flashcards ?? []).filter((w) => w?.id && w?.word),
+)
 
 const wordsProgress = ref<Record<string, any>>({})
 
-const loadProgress = async () => {
+const loadProgress = () => {
+  const uid = progressUserId.value
+  if (!uid) {
+    wordsProgress.value = {}
+    return
+  }
   const progress: Record<string, any> = {}
-  for (const word of vocabularyData) {
-    progress[word.id] = await getWordProgress('user123', word.id)
+  for (const word of vocabularyData.value) {
+    progress[word.id] = getWordProgress(uid, word.id)
   }
   wordsProgress.value = progress
 }
 
 onMounted(loadProgress)
+watch([() => props.flashcards, progressUserId], loadProgress)
 
 function handleWordAction(
   wordId: string,
@@ -250,7 +216,9 @@ function handleWordAction(
     // 'master' removed — long-term mastery only via SRS /review
   }
 
-  updateWordProgress('user123', wordId, updated)
+  const uid = progressUserId.value
+  if (!uid) return
+  updateWordProgress(uid, wordId, updated)
   wordsProgress.value[wordId] = updated
 }
 

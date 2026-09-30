@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { readDailyReviewTarget } from '~/composables/use-learning-settings'
 
 export type DailyQuestId =
   | 'memory_pairs'
@@ -77,7 +78,6 @@ const QUEST_DEFS: Omit<DailyQuest, 'progress' | 'completed'>[] = [
 interface StoredState {
   date: string
   progress: Record<DailyQuestId, number>
-  claimed: Record<DailyQuestId, boolean>
 }
 
 const todayKey = () => {
@@ -94,45 +94,22 @@ const emptyProgress = (): Record<DailyQuestId, number> => ({
   recall_sentences: 0,
 })
 
-const emptyClaimed = (): Record<DailyQuestId, boolean> => ({
-  memory_pairs: false,
-  speed_combo: false,
-  story_scenario: false,
-  srs_reviews: false,
-  shadowing_session: false,
-  recall_sentences: false,
-})
-
 const progressMap = ref<Record<DailyQuestId, number>>(emptyProgress())
-const claimedMap = ref<Record<DailyQuestId, boolean>>(emptyClaimed())
 const serverXp = ref(0)
 const loaded = ref(false)
 let syncTimer: ReturnType<typeof setTimeout> | null = null
+/** Chuỗi ngày đã báo trong phiên này, để không nhắc lặp. */
+let lastNotifiedStreak = 0
 
-const getSrsTarget = () => {
-  let srsTarget = 20
-  try {
-    if (import.meta.client) {
-      const raw = localStorage.getItem('app_learning_settings_v1')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (typeof parsed.dailyReviewTarget === 'number' && parsed.dailyReviewTarget > 0) {
-          srsTarget = parsed.dailyReviewTarget
-        }
-      }
-    }
-  } catch {
-    // keep default
-  }
-  return srsTarget
-}
+// Trước đây hàm này đọc thẳng localStorage key của `use-daily-path`. Giờ hỏi
+// đúng chủ sở hữu thiết lập, nên đổi cách lưu trữ ở đó không làm gãy chỗ này.
+const getSrsTarget = () => readDailyReviewTarget()
 
 const persistLocal = () => {
   if (!import.meta.client) return
   const payload: StoredState = {
     date: todayKey(),
     progress: { ...progressMap.value },
-    claimed: { ...claimedMap.value },
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
@@ -146,8 +123,8 @@ const syncToServer = () => {
       if (!uid) return
       const res = await $fetch<{ xp: number }>('/api/daily/progress', {
         method: 'POST',
+        // Không gửi userId: server lấy danh tính từ phiên httpOnly.
         body: {
-          userId: uid,
           date: todayKey(),
           questProgress: { ...progressMap.value },
         },
@@ -171,20 +148,15 @@ const loadState = async () => {
     const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('daily_quests_v1')
     if (!raw) {
       progressMap.value = emptyProgress()
-      claimedMap.value = emptyClaimed()
     } else {
       const parsed = JSON.parse(raw) as StoredState
-      if (parsed.date !== todayKey()) {
-        progressMap.value = emptyProgress()
-        claimedMap.value = emptyClaimed()
-      } else {
-        progressMap.value = { ...emptyProgress(), ...parsed.progress }
-        claimedMap.value = { ...emptyClaimed(), ...parsed.claimed }
-      }
+      progressMap.value =
+        parsed.date !== todayKey()
+          ? emptyProgress()
+          : { ...emptyProgress(), ...parsed.progress }
     }
   } catch {
     progressMap.value = emptyProgress()
-    claimedMap.value = emptyClaimed()
   }
 
   // Merge from server (max wins)
@@ -194,7 +166,7 @@ const loadState = async () => {
     const res = await $fetch<{
       xp: number
       questProgress: Record<string, number>
-    }>(`/api/daily/progress?userId=${uid}&date=${todayKey()}`)
+    }>(`/api/daily/progress?date=${todayKey()}`)
     serverXp.value = res.xp || 0
     const serverQ = res.questProgress || {}
     const merged = emptyProgress()
@@ -268,11 +240,19 @@ const awardXp = async (amount: number) => {
   try {
     const uid = getSessionUserId()
     if (!uid) return
-    const res = await $fetch<{ xp: number }>('/api/daily/progress', {
-      method: 'POST',
-      body: { userId: uid, date: todayKey(), xpDelta: amount },
-    })
+    const res = await $fetch<{ xp: number; studyStreak?: number }>(
+      '/api/daily/progress',
+      { method: 'POST', body: { date: todayKey(), xpDelta: amount } },
+    )
     if (typeof res?.xp === 'number') serverXp.value = res.xp
+
+    // Server vẫn luôn trả `studyStreak` nhưng client chưa bao giờ đọc, nên
+    // chuỗi ngày học — mốc có sức nặng nhất — trôi qua không ai nhắc.
+    const streak = Number(res?.studyStreak)
+    if (Number.isFinite(streak) && streak >= 2 && streak !== lastNotifiedStreak) {
+      lastNotifiedStreak = streak
+      useStudyMascot().cue('streak', `Ngày thứ ${streak} liên tiếp. Đừng đứt nhé!`)
+    }
   } catch {
     // ignore
   }

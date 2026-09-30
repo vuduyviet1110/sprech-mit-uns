@@ -61,6 +61,10 @@ async function handleResetProgress() {
       'sprech_saved_news_articles',
       'german_learning_progress',
       'speed_quiz_high_score',
+      // Cờ "đã đẩy dữ liệu cũ lên server" — xoá cùng dữ liệu, nếu không lần sau
+      // sẽ không import lại được.
+      'smu_drill_migrated_v1',
+      'smu_news_migrated_v1',
     ]
     for (const k of keysToRemove) localStorage.removeItem(k)
     // Clear per-user word progress keys

@@ -72,8 +72,10 @@
         </Button>
       </div>
 
+      <!-- Cả hai tab này đều sống nhờ từ vựng của bài; không có thì nói thẳng
+           thay vì hiện dữ liệu mẫu. -->
       <div
-        v-if="currentView === 'flashcards' && !hasWords"
+        v-if="needsWords && !hasWords"
         class="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800"
       >
         <Icon
@@ -87,7 +89,7 @@
           {{
             isLoadingWords
               ? 'Đang tải từ vựng của bài học...'
-              : 'Bài học này chưa có từ vựng để luyện thẻ.'
+              : 'Bài học này chưa có từ vựng.'
           }}
         </p>
       </div>
@@ -133,7 +135,9 @@ const showTranslation = ref(false)
 
 // Từ vựng thật của bài. Trước đây chỗ này truyền `demoFlashcards` từ `~/mock-data`
 // mà không kèm prop `demo`, nên lật thẻ giả (nghĩa tiếng Anh) sẽ POST
-// /api/progress/word với wordId bịa và ghi thẳng vào UserWordProgress.
+// /api/progress/word với wordId bịa. FK `UserWordProgress_wordId_fkey` chặn nên
+// DB không nhiễm, nhưng mỗi lần lật thẻ là một request hỏng và localStorage vẫn
+// ghi tiến độ cho từ không tồn tại.
 const topicWords = ref<VocabularyWord[]>(props.topic.words ?? [])
 const isLoadingWords = ref(false)
 
@@ -163,6 +167,9 @@ watch(
 )
 
 const hasWords = computed(() => topicWords.value.length > 0)
+const needsWords = computed(
+  () => currentView.value === 'flashcards' || currentView.value === 'vocabulary',
+)
 
 const getCurrentComponent = () => {
   switch (currentView.value) {

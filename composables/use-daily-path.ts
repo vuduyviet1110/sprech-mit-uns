@@ -1,4 +1,8 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import {
+  readDailyReviewTarget,
+  useLearningSettings,
+} from '~/composables/use-learning-settings'
 
 export type DailyPathBlockId = 'srs' | 'shadowing' | 'recall'
 
@@ -13,8 +17,6 @@ export interface DailyPathBlock {
 }
 
 const PATH_STORAGE_KEY = 'daily_path_v1'
-const SETTINGS_STORAGE_KEY = 'app_learning_settings_v1'
-const DEFAULT_REVIEW_TARGET = 20
 
 const getSessionUserId = (): string | null => {
   try {
@@ -29,14 +31,6 @@ interface PathStoredState {
   date: string
   completed: Record<DailyPathBlockId, boolean>
   srsReviewedCount: number
-}
-
-interface LearningSettings {
-  dailyReviewTarget: number
-  primaryLang: string
-  speechRate: number
-  dailyReminder: boolean
-  autoPlayAudio: boolean
 }
 
 const todayKey = () => {
@@ -62,10 +56,11 @@ const syncPathToServer = () => {
     try {
       const uid = getSessionUserId()
       if (!uid) return
+      // Không gửi userId: server lấy danh tính từ phiên httpOnly và bỏ qua
+      // giá trị client gửi lên (có test chốt chính sách này).
       await $fetch('/api/daily/progress', {
         method: 'POST',
         body: {
-          userId: uid,
           date: todayKey(),
           pathCompleted: { ...completedMap.value },
           srsReviewedCount: srsReviewedCount.value,
@@ -105,7 +100,7 @@ const loadPath = async () => {
     const res = await $fetch<{
       pathCompleted: Record<string, boolean>
       srsReviewedCount: number
-    }>(`/api/daily/progress?userId=${uid}&date=${todayKey()}`)
+    }>(`/api/daily/progress?date=${todayKey()}`)
     const serverPath = res.pathCompleted || {}
     completedMap.value = {
       srs: !!(completedMap.value.srs || serverPath.srs),
@@ -146,78 +141,15 @@ const ensurePathLoaded = () => {
   }
 }
 
-const settings = ref<LearningSettings>({
-  dailyReviewTarget: DEFAULT_REVIEW_TARGET,
-  primaryLang: 'de',
-  speechRate: 0.85,
-  dailyReminder: true,
-  autoPlayAudio: true,
-})
-const settingsLoaded = ref(false)
+// Thiết lập học tập đã tách sang `use-learning-settings` — ở đó DB là nguồn sự
+// thật và localStorage chỉ là bộ đệm. Trước đây khối này nằm lẫn trong file
+// lộ trình, còn `use-daily-quests` thì thò tay đọc thẳng localStorage key của
+// nó, nên sửa một chỗ là gãy chỗ kia.
 
-const persistSettings = () => {
-  if (!import.meta.client) return
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings.value))
-  // Also persist to DB (fire-and-forget)
-  const uid = getSessionUserId()
-  if (!uid) return
-  void $fetch('/api/settings', {
-    method: 'POST',
-    body: {
-      userId: uid,
-      ...settings.value,
-    },
-  }).catch(() => {})
-}
-
-const ensureSettingsLoaded = () => {
-  if (!settingsLoaded.value) void loadSettings()
-}
-
-const loadSettings = async () => {
-  if (!import.meta.client) return
-  // Local first
-  try {
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<LearningSettings>
-      settings.value = {
-        dailyReviewTarget:
-          typeof parsed.dailyReviewTarget === 'number' && parsed.dailyReviewTarget > 0
-            ? parsed.dailyReviewTarget
-            : DEFAULT_REVIEW_TARGET,
-        primaryLang: parsed.primaryLang || 'de',
-        speechRate: typeof parsed.speechRate === 'number' ? parsed.speechRate : 0.85,
-        dailyReminder: parsed.dailyReminder !== false,
-        autoPlayAudio: parsed.autoPlayAudio !== false,
-      }
-    }
-  } catch {
-    // keep defaults
-  }
-
-  // Prefer server if available
-  try {
-    const uid = getSessionUserId()
-    if (!uid) throw new Error('unauthenticated')
-    const res = await $fetch<LearningSettings & { persisted?: boolean }>(
-      `/api/settings?userId=${uid}`,
-    )
-    if (res?.persisted) {
-      settings.value = {
-        dailyReviewTarget: res.dailyReviewTarget || DEFAULT_REVIEW_TARGET,
-        primaryLang: res.primaryLang || 'de',
-        speechRate: typeof res.speechRate === 'number' ? res.speechRate : 0.85,
-        dailyReminder: res.dailyReminder !== false,
-        autoPlayAudio: res.autoPlayAudio !== false,
-      }
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings.value))
-    }
-  } catch {
-    // offline
-  }
-
-  settingsLoaded.value = true
+const BLOCK_NAMES: Record<DailyPathBlockId, string> = {
+  srs: 'Ôn SRS',
+  shadowing: 'Shadowing',
+  recall: 'Active Recall',
 }
 
 const markBlockComplete = (id: DailyPathBlockId) => {
@@ -225,49 +157,39 @@ const markBlockComplete = (id: DailyPathBlockId) => {
   if (completedMap.value[id]) return
   completedMap.value = { ...completedMap.value, [id]: true }
   persistPath()
+
+  // Cáo đồng hành từng chỉ biết đúng/sai từng câu, im lặng đúng lúc người học
+  // vừa xong cả một khối — tức là khoảnh khắc đáng ghi nhận nhất.
+  const done = Object.values(completedMap.value).filter(Boolean).length
+  const total = Object.keys(completedMap.value).length
+  const { cue } = useStudyMascot()
+  cue(
+    'streak',
+    done >= total
+      ? `Xong cả ${total} khối hôm nay. Nghỉ được rồi!`
+      : `Xong khối ${BLOCK_NAMES[id]}. Còn ${total - done} khối nữa.`,
+  )
 }
 
 const recordSrsReview = (count = 1) => {
   ensurePathLoaded()
-  ensureSettingsLoaded()
+  const before = srsReviewedCount.value
   srsReviewedCount.value += count
-  const target = settings.value.dailyReviewTarget
+  const target = readDailyReviewTarget()
   if (srsReviewedCount.value >= target) {
-    completedMap.value = { ...completedMap.value, srs: true }
+    // Chỉ mừng đúng một lần, ở đúng thẻ vừa chạm chỉ tiêu. `markBlockComplete`
+    // tự thoát sớm nếu khối đã xong nên không nói chồng lời.
+    if (before < target) {
+      useStudyMascot().cue('encourage', `Đủ ${target} thẻ hôm nay rồi!`)
+    }
+    markBlockComplete('srs')
   }
   persistPath()
 }
 
-const setDailyReviewTarget = (n: number) => {
-  ensureSettingsLoaded()
-  settings.value = {
-    ...settings.value,
-    dailyReviewTarget: Math.max(1, Math.min(200, Math.round(n) || DEFAULT_REVIEW_TARGET)),
-  }
-  persistSettings()
-}
-
-const saveLearningSettings = (partial: Partial<LearningSettings>) => {
-  ensureSettingsLoaded()
-  settings.value = { ...settings.value, ...partial }
-  if (typeof partial.dailyReviewTarget === 'number') {
-    settings.value.dailyReviewTarget = Math.max(
-      1,
-      Math.min(200, Math.round(partial.dailyReviewTarget) || DEFAULT_REVIEW_TARGET),
-    )
-  }
-  persistSettings()
-}
-
-const dailyReviewTarget = computed(() => {
-  ensureSettingsLoaded()
-  return settings.value.dailyReviewTarget
-})
-
 const srsTodayProgress = computed(() => {
   ensurePathLoaded()
-  ensureSettingsLoaded()
-  const target = settings.value.dailyReviewTarget
+  const target = readDailyReviewTarget()
   return {
     count: srsReviewedCount.value,
     target,
@@ -313,8 +235,41 @@ const pathCompletionCount = computed(
   () => pathBlocks.value.filter((b) => b.completed).length,
 )
 
+/**
+ * Đẩy tiến độ hôm nay sang cáo để nó biết mời khối kế tiếp.
+ *
+ * Đẩy một chiều: cáo không import ngược file này (file này đã gọi `cue()`, nếu
+ * hai bên import nhau sẽ thành vòng tròn module).
+ */
+watch(
+  pathBlocks,
+  (blocks) => {
+    if (!import.meta.client) return
+    const next = blocks.find((b) => !b.completed) ?? null
+    reportTodayState({
+      done: blocks.filter((b) => b.completed).length,
+      total: blocks.length,
+      next: next ? { title: next.title, to: next.to } : null,
+    })
+  },
+  { immediate: true, deep: true },
+)
+
 export function useDailyPath() {
   ensurePathLoaded()
+
+  // Re-export thiết lập để các trang đang dùng `useDailyPath()` không phải sửa.
+  // Gọi trong hàm chứ không ở module scope: `useLearningSettings` dùng
+  // `useSession()`, vốn cần Nuxt context.
+  const {
+    settings,
+    dailyReviewTarget,
+    load: loadSettings,
+    ensureLoaded: ensureSettingsLoaded,
+    saveSettings: saveLearningSettings,
+    setDailyReviewTarget,
+  } = useLearningSettings()
+
   ensureSettingsLoaded()
 
   return {

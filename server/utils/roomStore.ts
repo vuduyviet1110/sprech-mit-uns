@@ -23,6 +23,42 @@ export interface StudyRoom {
 const rooms = new Map<string, StudyRoom>()
 const pinToRoom = new Map<string, string>()
 
+/** Phòng sống tối đa 6 giờ. Quá hạn thì dọn để giải phóng cả mã PIN lẫn bộ nhớ. */
+export const ROOM_TTL_MS = 6 * 60 * 60 * 1000
+/** Phòng đã kết thúc chỉ cần giữ đủ lâu để người chơi xem bảng xếp hạng. */
+export const FINISHED_ROOM_TTL_MS = 60 * 60 * 1000
+
+/**
+ * Dọn phòng quá hạn.
+ *
+ * Trước đây không chỗ nào xoá khỏi `rooms`/`pinToRoom` — `end.post.ts` chỉ đặt
+ * `phase = 'gameover'` — nên mọi phòng từng tạo nằm lại trong RAM đến khi khởi
+ * động lại tiến trình, và mã PIN của chúng cũng không bao giờ được tái dùng.
+ */
+export function pruneExpiredRooms(now: number = Date.now()): number {
+  let removed = 0
+  for (const [pin, room] of rooms) {
+    const ttl =
+      room.phase === 'gameover' ? FINISHED_ROOM_TTL_MS : ROOM_TTL_MS
+    if (now - room.createdAt < ttl) continue
+    rooms.delete(pin)
+    pinToRoom.delete(pin)
+    removed++
+  }
+  return removed
+}
+
+/** Xoá hẳn một phòng. Dùng khi chủ phòng kết thúc ván. */
+export function deleteStudyRoom(pin: string): boolean {
+  pinToRoom.delete(pin)
+  return rooms.delete(pin)
+}
+
+/** Số phòng đang giữ trong bộ nhớ — dùng cho test và chẩn đoán. */
+export function countStudyRooms(): number {
+  return rooms.size
+}
+
 function generatePin(): string {
   let pin: string
   do {
@@ -32,6 +68,9 @@ function generatePin(): string {
 }
 
 export function createStudyRoom(hostId: string, gameMode: string = 'speed_60s', language: string = 'de'): StudyRoom {
+  // Dọn ngay lúc tạo: không cần timer nền, và phòng mới là lúc duy nhất
+  // bộ nhớ thực sự tăng thêm.
+  pruneExpiredRooms()
   const pin = generatePin()
   const room: StudyRoom = {
     pin,

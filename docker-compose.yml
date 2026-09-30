@@ -44,6 +44,7 @@ services:
       - NUXT_PUBLIC_SHOW_DEMO=${NUXT_PUBLIC_SHOW_DEMO:-}
       - SMU_ALLOW_CATALOG_WRITES=${SMU_ALLOW_CATALOG_WRITES:-}
       - SMU_ADMIN_EMAILS=${SMU_ADMIN_EMAILS:-}
+      - SMU_ENABLE_ROOMS=${SMU_ENABLE_ROOMS:-}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sprech_mit_uns}?schema=public
       - DIRECT_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-sprech_mit_uns}?schema=public
     healthcheck:

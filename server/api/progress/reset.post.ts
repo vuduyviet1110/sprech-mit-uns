@@ -34,8 +34,14 @@ export default defineEventHandler(async (event) => {
       const deletedDaily = await prisma.userDailyProgress.deleteMany({
         where: { userId },
       })
-      // Tiến độ chép chính tả vốn sống sót qua "xoá toàn bộ tiến độ".
+      // Ba bảng dưới đây vốn sống sót qua "xoá toàn bộ tiến độ".
       const deletedLessons = await prisma.userLessonProgress.deleteMany({
+        where: { userId },
+      })
+      const deletedDrill = await prisma.userPronunciationDrill.deleteMany({
+        where: { userId },
+      })
+      const deletedArticles = await prisma.userSavedArticle.deleteMany({
         where: { userId },
       })
 
@@ -46,6 +52,8 @@ export default defineEventHandler(async (event) => {
         deletedAttemptsCount: deletedAttempts.count,
         deletedDailyCount: deletedDaily.count,
         deletedLessonProgressCount: deletedLessons.count,
+        deletedDrillCount: deletedDrill.count,
+        deletedArticlesCount: deletedArticles.count,
       }
     } catch (err: any) {
       if (err?.statusCode) throw err

@@ -5,7 +5,7 @@ export function assertRoomsEnabled() {
   if (process.env.NODE_ENV === 'production' && process.env.SMU_ENABLE_ROOMS !== '1') {
     throw createError({
       statusCode: 503,
-      statusMessage:
+      message:
         'Quiz phòng multiplayer chỉ là demo (single-server). Bật SMU_ENABLE_ROOMS=1 nếu cần.',
     })
   }

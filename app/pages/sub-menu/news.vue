@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useSrsStore } from '~/stores/useSrsStore'
 import { allSourcesLabel, feedsForLanguage } from '~/utils/news-sources'
+import { useSavedArticles } from '~/composables/use-saved-articles'
 
 definePageMeta({ layout: 'page' })
 useHead({ title: '📰 Tin tức & SRS Reader - Sprech Mit Uns' })
@@ -9,6 +10,8 @@ useHead({ title: '📰 Tin tức & SRS Reader - Sprech Mit Uns' })
 const { playSound } = useGamification()
 const { currentLanguage } = useLanguage()
 const srsStore = useSrsStore()
+const { savedArticles, lastDropped, loadSaved, saveArticle, unsaveArticle } =
+  useSavedArticles()
 
 
 interface Article {
@@ -120,6 +123,8 @@ const selectedArticle = computed(() => {
 const activeWord = ref<string | null>(null)
 const wordMeaning = ref<string | null>(null)
 const isLookingUpWord = ref(false)
+/** Tra hỏng (upstream lỗi) — khác với từ không có nghĩa. */
+const lookupFailed = ref(false)
 const savedWords = ref<string[]>([])
 
 // Scraper Modal & Filter State
@@ -148,33 +153,23 @@ watch(availableRssSources, (sources) => {
   }
 })
 
-onMounted(() => {
-  try {
-    const stored = localStorage.getItem('sprech_saved_news_articles')
-    if (stored) {
-      const parsed: Article[] = JSON.parse(stored)
-      if (parsed.length > 0) {
-        const savedIds = new Set(parsed.map((a) => a.id))
-        articles.value.forEach((a) => {
-          if (savedIds.has(a.id)) a.isSaved = true
-        })
-        const extraSaved = parsed.filter((pa) => !articles.value.some((a) => a.id === pa.id))
-        articles.value = [...extraSaved, ...articles.value]
-      }
-    }
-  } catch (e) {
-    console.error('Error loading saved articles:', e)
-  }
-})
-
-function saveSavedArticlesToStorage() {
-  try {
-    const savedOnly = articles.value.filter((a) => a.isSaved)
-    localStorage.setItem('sprech_saved_news_articles', JSON.stringify(savedOnly))
-  } catch (e) {
-    console.error('Error saving articles to storage:', e)
-  }
+/** Gộp danh sách đã lưu (DB hoặc bộ đệm) vào danh sách đang hiển thị. */
+function mergeSavedIntoArticles(saved: Article[]) {
+  if (saved.length === 0) return
+  const savedIds = new Set(saved.map((a) => a.id))
+  articles.value.forEach((a) => {
+    if (savedIds.has(a.id)) a.isSaved = true
+  })
+  const extraSaved = saved.filter(
+    (sa) => !articles.value.some((a) => a.id === sa.id),
+  )
+  articles.value = [...extraSaved, ...articles.value]
 }
+
+onMounted(async () => {
+  await loadSaved()
+  mergeSavedIntoArticles(savedArticles.value as Article[])
+})
 
 // Split article text into interactive words & paragraphs
 const articleParagraphs = computed(() => {
@@ -207,24 +202,32 @@ const handleWordClick = async (word: string) => {
   speakText(cleanWord, speechLangCode.value)
 
   isLookingUpWord.value = true
+  lookupFailed.value = false
   try {
     const res: any = await $fetch(`/api/dictionary?search=${encodeURIComponent(cleanWord)}&lang=${activeLang.value}`)
     if (res && res.items && res.items.length > 0 && res.items[0].meaning) {
       wordMeaning.value = res.items[0].meaning
-    } else {
-      // Auto-translate using server Google Translate proxy API if word not in local dictionary
-      const transRes: any = await $fetch(`/api/translate?text=${encodeURIComponent(cleanWord)}&from=${activeLang.value}&to=vi`)
-      if (transRes && transRes.translated) {
-        wordMeaning.value = transRes.translated
-      } else {
-        wordMeaning.value = `Từ vựng ${languageLabel.value}`
-      }
+      return
     }
+
+    // Không có trong từ điển nội bộ thì nhờ dịch tự động.
+    const transRes: any = await $fetch(
+      `/api/translate?text=${encodeURIComponent(cleanWord)}&from=${activeLang.value}&to=vi`,
+    )
+    wordMeaning.value = transRes?.translated || ''
+    if (!wordMeaning.value) lookupFailed.value = true
   } catch {
-    wordMeaning.value = `Từ vựng ${languageLabel.value}`
+    // Phân biệt "tra hỏng" với "không có nghĩa". Trước đây cả hai đều hiện
+    // "Từ vựng tiếng Đức", nên upstream chết trông như từ không có nghĩa.
+    lookupFailed.value = true
+    wordMeaning.value = ''
   } finally {
     isLookingUpWord.value = false
   }
+}
+
+const retryLookup = () => {
+  if (activeWord.value) void handleWordClick(activeWord.value)
 }
 
 const speakCurrentArticle = () => {
@@ -236,39 +239,51 @@ const speakCurrentArticle = () => {
 const newsToastText = ref<string>('')
 let newsToastTimer: any = null
 
+const showNewsToast = (text: string) => {
+  newsToastText.value = text
+  if (newsToastTimer) clearTimeout(newsToastTimer)
+  newsToastTimer = setTimeout(() => {
+    newsToastText.value = ''
+  }, 4000)
+}
+
 const saveToSRS = async (word: string) => {
   if (!savedWords.value.includes(word)) {
     savedWords.value.push(word)
     playSound('correct')
-    newsToastText.value = `Đã thêm "${word}" vào ôn tập SRS!`
-    if (newsToastTimer) clearTimeout(newsToastTimer)
-    newsToastTimer = setTimeout(() => {
-      newsToastText.value = ''
-    }, 4000)
+    showNewsToast(`Đã thêm "${word}" vào ôn tập SRS!`)
     await srsStore.addToSrs(word, wordMeaning.value || undefined, activeLang.value)
   }
   activeWord.value = null
 }
 
 
-const toggleSaveArticle = (article: Article) => {
+const toggleSaveArticle = async (article: Article) => {
   article.isSaved = !article.isSaved
-  saveSavedArticlesToStorage()
+
   if (article.isSaved) {
     playSound('correct')
+    await saveArticle({ ...article, lang: article.lang || activeLang.value })
+    if (lastDropped.value > 0) {
+      showNewsToast(
+        `Kho bài đã lưu đầy — đã bỏ ${lastDropped.value} bài cũ nhất.`,
+      )
+    }
+  } else {
+    await unsaveArticle(article.id)
   }
 }
 
-const deleteArticle = (artId: string) => {
+const deleteArticle = async (artId: string) => {
   const index = articles.value.findIndex((a) => a.id === artId)
-  if (index !== -1) {
-    const art = articles.value[index]
-    articles.value.splice(index, 1)
-    if (art && art.isSaved) saveSavedArticlesToStorage()
+  if (index === -1) return
 
-    if (selectedArticleIdx.value >= filteredArticles.value.length) {
-      selectedArticleIdx.value = Math.max(0, filteredArticles.value.length - 1)
-    }
+  const art = articles.value[index]
+  articles.value.splice(index, 1)
+  if (art && art.isSaved) await unsaveArticle(artId)
+
+  if (selectedArticleIdx.value >= filteredArticles.value.length) {
+    selectedArticleIdx.value = Math.max(0, filteredArticles.value.length - 1)
   }
 }
 
@@ -527,14 +542,26 @@ const handleScrapeNews = async () => {
                       <Icon name="lucide:loader-2" class="w-3.5 h-3.5 animate-spin" />
                       Đang tra từ điển...
                     </span>
-                    <span v-else>{{ wordMeaning || 'Đang cập nhật nghĩa từ vựng' }}</span>
+                    <!-- Tra hỏng khác với từ không có nghĩa: cho bấm thử lại -->
+                    <span v-else-if="lookupFailed" class="flex items-center gap-1.5 flex-wrap">
+                      <Icon name="lucide:wifi-off" class="w-3.5 h-3.5 shrink-0" />
+                      <span>Không tra được nghĩa lúc này.</span>
+                      <button
+                        class="underline font-extrabold hover:text-white cursor-pointer"
+                        @click="retryLookup"
+                      >
+                        Thử lại
+                      </button>
+                    </span>
+                    <span v-else>{{ wordMeaning || 'Chưa có nghĩa cho từ này' }}</span>
                   </div>
 
                   <div class="pt-2 flex items-center justify-end gap-2">
+                    <!-- Tra hỏng thì chưa biết nghĩa — lưu lúc này sẽ tạo thẻ rỗng -->
                     <button
                       @click="saveToSRS(activeWord)"
-                      :disabled="savedWords.includes(activeWord)"
-                      class="px-3 py-1.5 bg-white text-emerald-700 font-extrabold rounded-xl text-xs flex items-center gap-1.5 hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                      :disabled="savedWords.includes(activeWord) || isLookingUpWord || lookupFailed"
+                      class="px-3 py-1.5 bg-white text-emerald-700 font-extrabold rounded-xl text-xs flex items-center gap-1.5 hover:bg-emerald-50 active:scale-95 transition-all cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Icon :name="savedWords.includes(activeWord) ? 'lucide:check' : 'lucide:bookmark-plus'" class="w-3.5 h-3.5" />
                       <span>{{ savedWords.includes(activeWord) ? 'Đã lưu SRS' : 'Lưu vào Ôn tập SRS' }}</span>
@@ -688,7 +715,7 @@ const handleScrapeNews = async () => {
     </div>
     <div
       v-if="newsToastText"
-      class="fixed bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
+      class="fixed bottom-32 sm:bottom-8 right-8 z-[999999] flex items-center gap-3.5 px-6 py-4 rounded-2xl shadow-2xl border border-emerald-500/50 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white font-bold text-sm transition-all"
       style="box-shadow: 0 15px 35px -5px rgba(16, 185, 129, 0.4);"
     >
       <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md">

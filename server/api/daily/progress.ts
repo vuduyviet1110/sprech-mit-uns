@@ -11,7 +11,11 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const body = method === 'POST' ? await readBody(event) : null
   const userId = await requireUserId(event)
-  const date = todayKeyFromQuery(query.date as string)
+  // POST nhận `date` ở body (client gửi kiểu đó), GET thì ở query. Trước đây
+  // chỉ đọc query nên mọi lần ghi đều rơi vào ngày hôm nay bất kể body gửi gì.
+  const date = todayKeyFromQuery(
+    (body?.date as string) || (query.date as string),
+  )
 
   if (method === 'GET') {
     const row = await getOrCreateDailyProgress(userId, date)
@@ -32,9 +36,19 @@ export default defineEventHandler(async (event) => {
       ...((row.questProgress as Record<string, number>) || {}),
       ...((body.questProgress as Record<string, number>) || {}),
     }
-    const nextPath = {
+    // Mốc đã hoàn thành chỉ được bật, không được tắt. Trước đây đây là spread
+    // thuần (last-write-wins), nên một client gửi `{srs:false}` — ví dụ vừa mở
+    // app lúc chưa đăng nhập rồi mới đăng nhập — sẽ xoá sạch lộ trình đã xong
+    // trong ngày. `questProgress` bên dưới vốn đã gộp bằng max.
+    const nextPath: Record<string, boolean> = {
       ...((row.pathCompleted as Record<string, boolean>) || {}),
-      ...((body.pathCompleted as Record<string, boolean>) || {}),
+    }
+    if (body.pathCompleted && typeof body.pathCompleted === 'object') {
+      for (const [k, v] of Object.entries(
+        body.pathCompleted as Record<string, boolean>,
+      )) {
+        nextPath[k] = !!nextPath[k] || !!v
+      }
     }
 
     if (body.questProgress && typeof body.questProgress === 'object') {

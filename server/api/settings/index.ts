@@ -7,6 +7,7 @@ const defaults = {
   speechRate: 0.85,
   dailyReminder: true,
   autoPlayAudio: true,
+  mascot: true,
 }
 
 export default defineEventHandler(async (event) => {
@@ -25,6 +26,7 @@ export default defineEventHandler(async (event) => {
             speechRate: row.speechRate,
             dailyReminder: row.dailyReminder,
             autoPlayAudio: row.autoPlayAudio,
+            mascot: row.mascot,
           }
         : defaults),
       userId,
@@ -33,15 +35,40 @@ export default defineEventHandler(async (event) => {
   }
 
   if (method === 'POST' || method === 'PUT') {
+    // Cập nhật từng phần: field không gửi lên thì giữ nguyên giá trị đang có.
+    // Trước đây handler dựng lại cả row từ body với `|| defaults`, nên client chỉ
+    // muốn đổi `primaryLang` sẽ vô tình reset `dailyReviewTarget` và `speechRate`.
+    const current =
+      (await prisma.userSettings.findUnique({ where: { userId } })) ?? defaults
+
+    const has = (key: string) =>
+      body && Object.prototype.hasOwnProperty.call(body, key) && body[key] != null
+
     const data = {
-      dailyReviewTarget: Math.max(
-        1,
-        Math.min(200, Number(body.dailyReviewTarget) || defaults.dailyReviewTarget),
-      ),
-      primaryLang: body.primaryLang === 'cs' ? 'cs' : 'de',
-      speechRate: Math.max(0.5, Math.min(1.5, Number(body.speechRate) || defaults.speechRate)),
-      dailyReminder: body.dailyReminder !== false,
-      autoPlayAudio: body.autoPlayAudio !== false,
+      dailyReviewTarget: has('dailyReviewTarget')
+        ? Math.max(
+            1,
+            Math.min(
+              200,
+              Number(body.dailyReviewTarget) || current.dailyReviewTarget,
+            ),
+          )
+        : current.dailyReviewTarget,
+      primaryLang: has('primaryLang')
+        ? body.primaryLang === 'cs'
+          ? 'cs'
+          : 'de'
+        : current.primaryLang,
+      speechRate: has('speechRate')
+        ? Math.max(0.5, Math.min(1.5, Number(body.speechRate) || current.speechRate))
+        : current.speechRate,
+      dailyReminder: has('dailyReminder')
+        ? body.dailyReminder !== false
+        : current.dailyReminder,
+      autoPlayAudio: has('autoPlayAudio')
+        ? body.autoPlayAudio !== false
+        : current.autoPlayAudio,
+      mascot: has('mascot') ? body.mascot !== false : current.mascot,
     }
 
     const row = await prisma.userSettings.upsert({
@@ -56,6 +83,7 @@ export default defineEventHandler(async (event) => {
       speechRate: row.speechRate,
       dailyReminder: row.dailyReminder,
       autoPlayAudio: row.autoPlayAudio,
+      mascot: row.mascot,
       userId,
       persisted: true,
     }

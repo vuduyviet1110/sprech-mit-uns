@@ -5,6 +5,7 @@ type MeResponse = {
   userId: string | null
   email: string | null
   isDemo: boolean
+  isAdmin?: boolean
   createdAt?: string
 }
 
@@ -16,6 +17,7 @@ export function useSession() {
   const userId = useState<string | null>('session-user-id', () => null)
   const email = useState<string | null>('session-email', () => null)
   const hydrated = useState('session-hydrated', () => false)
+  const isAdmin = useState('session-is-admin', () => false)
 
   const isAuthenticated = computed(() => !!userId.value)
   const isDemo = computed(() => false)
@@ -23,6 +25,7 @@ export function useSession() {
   const applyMe = (res: MeResponse) => {
     userId.value = res.authenticated ? res.userId : null
     email.value = res.authenticated ? res.email : null
+    isAdmin.value = !!(res.authenticated && res.isAdmin)
     hydrated.value = true
   }
 
@@ -40,6 +43,7 @@ export function useSession() {
     userId.value = res.userId
     email.value = res.email
     hydrated.value = true
+    await fetchMe()
     return res
   }
 
@@ -60,6 +64,7 @@ export function useSession() {
     } finally {
       userId.value = null
       email.value = null
+      isAdmin.value = false
       hydrated.value = true
     }
   }
@@ -74,6 +79,7 @@ export function useSession() {
     email,
     hydrated,
     isAuthenticated,
+    isAdmin,
     isDemo,
     setUserId,
     clearSession,

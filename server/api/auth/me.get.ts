@@ -1,4 +1,5 @@
 import { prisma } from '~/server/ultis/prisma'
+import { isAdminEmail } from '~/server/utils/admin'
 import { resolveUserId } from '~/server/utils/user'
 
 export default defineEventHandler(async (event) => {
@@ -10,6 +11,7 @@ export default defineEventHandler(async (event) => {
       userId: null,
       email: null,
       isDemo: false,
+      isAdmin: false,
     }
   }
 
@@ -24,6 +26,7 @@ export default defineEventHandler(async (event) => {
       userId: null,
       email: null,
       isDemo: false,
+      isAdmin: false,
     }
   }
 
@@ -34,6 +37,7 @@ export default defineEventHandler(async (event) => {
     userId: user.id,
     email: user.email,
     isDemo: isSeededDemo,
+    isAdmin: isAdminEmail(user.email),
     createdAt: user.createdAt,
   }
 })

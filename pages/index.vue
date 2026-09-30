@@ -9,11 +9,6 @@ const currentTab = ref<'demo' | 'feature' | undefined>()
 const previewSectionRef = ref<HTMLElement | null>(null)
 const { scrollProgress, parallax, reducedMotion } = useLandingScroll()
 
-const launchpadGridRef = ref<HTMLElement | null>(null)
-/** How many launchpad cards have entered (0..n) — sequential reveal */
-const launchpadShown = ref(0)
-const launchpadTimers: ReturnType<typeof setTimeout>[] = []
-
 function toggleTab(tab: 'demo' | 'feature') {
   if (currentTab.value === tab) {
     currentTab.value = undefined
@@ -99,51 +94,9 @@ const launchpad = [
   },
 ]
 
-function revealLaunchpadCards() {
-  if (launchpadShown.value > 0) return
-  launchpad.forEach((_, i) => {
-    const t = setTimeout(() => {
-      launchpadShown.value = i + 1
-    }, 80 + i * 220)
-    launchpadTimers.push(t)
-  })
-}
-
 onMounted(() => {
   // Avoid leftover scroll from /progress dimming the hero via parallax.opacity
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-
-  const el = launchpadGridRef.value
-  if (!el) {
-    revealLaunchpadCards()
-    return
-  }
-
-  const io = new IntersectionObserver(
-    (entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        revealLaunchpadCards()
-        io.disconnect()
-      }
-    },
-    { threshold: 0.02, rootMargin: '120px 0px 120px 0px' },
-  )
-  io.observe(el)
-
-  // Reveal when scrolled into view — keep stagger, but never stay blank forever
-  const soon = setTimeout(() => {
-    const rect = el.getBoundingClientRect()
-    if (rect.top < window.innerHeight * 0.95 && rect.bottom > 0) revealLaunchpadCards()
-  }, 450)
-  const hard = setTimeout(() => {
-    launchpadShown.value = launchpad.length
-  }, 5000)
-  launchpadTimers.push(soon, hard)
-
-  onUnmounted(() => {
-    io.disconnect()
-    launchpadTimers.forEach(clearTimeout)
-  })
 })
 
 const toneClasses = {
@@ -479,12 +432,13 @@ const toneClasses = {
         </p>
       </AwesomeLandingReveal>
 
-      <div ref="launchpadGridRef" class="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
-        <div
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
+        <AwesomeLandingReveal
           v-for="(item, i) in launchpad"
           :key="item.to"
-          class="launchpad-card"
-          :class="{ 'is-in': launchpadShown > i }"
+          class="h-full"
+          variant="up"
+          :delay="i * 110"
         >
           <NuxtLink
             :to="item.to"
@@ -525,7 +479,7 @@ const toneClasses = {
               <Icon name="lucide:arrow-right" class="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
             </div>
           </NuxtLink>
-        </div>
+        </AwesomeLandingReveal>
       </div>
     </section>
 
@@ -558,24 +512,5 @@ const toneClasses = {
 .tab-fade-enter-active,
 .tab-fade-leave-active {
   transition: all 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-</style>
-
-<style>
-/* Unscoped so the stagger always applies (not stripped by scoped + HMR quirks) */
-.landing-scroll .launchpad-card {
-  opacity: 0;
-  transform: translate3d(0, 64px, 0) scale(0.94);
-  filter: none;
-  pointer-events: none;
-  will-change: transform, opacity;
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.landing-scroll .launchpad-card.is-in {
-  opacity: 1;
-  transform: translate3d(0, 0, 0) scale(1);
-  pointer-events: auto;
 }
 </style>
